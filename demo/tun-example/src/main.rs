@@ -35,7 +35,7 @@ async fn main() -> std::io::Result<()> {
         .name("utun0")
             .ipv4(Ipv4Addr::new(10, 0, 0, 117), 24, None)
             .ipv6("CDCD:910A:2222:5498:8475:1111:3900:2021", 64)
-            .offload(true)
+            // .offload(true)
             .build_async()?,
     );
 
@@ -52,7 +52,7 @@ async fn main() -> std::io::Result<()> {
             }
             len = dev.recv(&mut buf) => {
                 let len = len?;
-                println!("len = {len}");
+                println!("raw packet header (first 20B): {:02x?}", &buf[..std::cmp::min(len, 20)]);
                 //println!("pkt: {:?}", &buf[..len?]);
                 handle_pkt(&buf[..len], &dev).await?;
             }
