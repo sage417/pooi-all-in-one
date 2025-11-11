@@ -5,10 +5,28 @@ edition = "2024"
 
 [dependencies]
 ctrlc2 = "3.7"
-env_logger = "0.11"
 pnet_packet = "0.35"
-tokio = { version = "1.48", features = ["rt-multi-thread", "macros", "signal"] }
+tokio = { version = "1.48", features = ["rt-multi-thread", "macros", "signal", "sync"] }
 tun-rs = { version = "2", features = ["async"] }
+
+# Log
+env_logger = "0.11"
+log = "0.4.28"
+
+# Error handling
+anyhow = "1.0.100"
+thiserror = "2.0.17"
+
+# Utility
+lazy_static = "1.5.0"
+lru = "0.16.2"
+futures = "0.3.31"
+async-trait = "0.1.89"
+colored = "3.0.0"
+prost = "0.14"
+
+[build-dependencies]
+prost-build = "0.14"
 
 [features]
 default = ["async_tokio"]
