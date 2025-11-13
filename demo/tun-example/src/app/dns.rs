@@ -1,14 +1,14 @@
 use anyhow::{Result, anyhow};
 use lru::LruCache;
-#[allow(unused_imports)]
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+
+use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Weak};
-#[allow(unused_imports)]
 use std::time::{Duration, Instant};
 use std::{collections::HashMap, num::NonZeroUsize};
 use tokio::sync::{Mutex, RwLock};
 
 use super::dispatcher::Dispatcher;
+use crate::app::session::{Session, SocksAddr, TransportProtocol};
 
 pub type SyncDnsClient = Arc<RwLock<DnsClient>>;
 type DNSCache = Arc<Mutex<LruCache<String, CacheEntry>>>;
@@ -18,16 +18,68 @@ pub struct DnsClient {
     dispatcher: Option<Weak<Dispatcher>>,
     listen_addrs: Vec<SocketAddr>,
     hosts: HashMap<String, Vec<IpAddr>>,
-    ipv4_cache: DNSCache,
-    ipv6_cache: DNSCache,
+    dns_cache: DNSCache,
 }
 
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 struct CacheEntry {
-    pub addrs: Vec<IpAddr>,
-    // The deadline this entry should be considered expired.
+    pub v4_records: Vec<DnsRecord>,
+    pub v6_records: Vec<DnsRecord>,
+}
+
+impl CacheEntry {
+    pub fn new() -> Self {
+        Self {
+            v4_records: Vec::new(),
+            v6_records: Vec::new(),
+        }
+    }
+
+    pub fn add_record(&mut self, ip: IpAddr, ttl: Duration) {
+        let record = DnsRecord::new(ip, ttl);
+        match ip {
+            IpAddr::V4(_) => self.v4_records.push(record),
+            IpAddr::V6(_) => self.v6_records.push(record),
+        }
+    }
+
+    pub fn get_valid_v4_addrs(&self) -> Vec<IpAddr> {
+        self.v4_records
+            .iter()
+            .filter(|r| !r.is_expired())
+            .map(|r| r.ip)
+            .collect()
+    }
+
+    pub fn get_valid_v6_addrs(&self) -> Vec<IpAddr> {
+        self.v6_records
+            .iter()
+            .filter(|r| !r.is_expired())
+            .map(|r| r.ip)
+            .collect()
+    }
+}
+
+#[derive(Clone, Debug)]
+struct DnsRecord {
+    pub ip: IpAddr,
+    pub ttl: Duration,
     pub deadline: Instant,
+}
+
+impl DnsRecord {
+    pub fn new(ip: IpAddr, ttl: Duration) -> Self {
+        Self {
+            ip,
+            ttl,
+            deadline: Instant::now() + ttl,
+        }
+    }
+
+    pub fn is_expired(&self) -> bool {
+        Instant::now() > self.deadline
+    }
 }
 
 impl DnsClient {
@@ -56,133 +108,75 @@ impl DnsClient {
             dispatcher: None,
             listen_addrs,
             hosts,
-            ipv4_cache: Arc::new(Mutex::new(LruCache::<String, CacheEntry>::new(
-                NonZeroUsize::new(512).unwrap(),
-            ))),
-            ipv6_cache: Arc::new(Mutex::new(LruCache::<String, CacheEntry>::new(
+            dns_cache: Arc::new(Mutex::new(LruCache::<String, CacheEntry>::new(
                 NonZeroUsize::new(512).unwrap(),
             ))),
         });
     }
 
-    pub async fn optimize_dns_cache(&self, address: &str, connected_ip: &IpAddr) {
-        self.inner_optimize_cache(&self.ipv4_cache, address, connected_ip).await;
-        self.inner_optimize_cache(&self.ipv6_cache, address, connected_ip).await;
+    pub fn replace_dispatcher(&mut self, dispatcher: Weak<Dispatcher>) {
+        self.dispatcher.replace(dispatcher);
     }
 
-    async fn inner_optimize_cache(
-        &self,
-        dns_cache: &DNSCache,
-        address: &str,
-        connected_ip: &IpAddr,
-    ) {
+    pub async fn optimize_dns_cache(&self, address: &str, connected_ip: &IpAddr) {
         // Nothing to do if the target address is an IP address.
         if address.parse::<IpAddr>().is_ok() {
             return;
         }
 
-        let mut cache_guard = dns_cache.lock().await;
+        let mut cache_guard = self.dns_cache.lock().await;
 
         // If the connected IP is not in the first place, we should optimize it.
         if let Some(entry) = cache_guard.get_mut(address) {
-            if let Some(idx) = entry.addrs.iter().position(|&ip| ip == *connected_ip) {
+            let optimize_record = match connected_ip {
+                IpAddr::V4(..) => &mut entry.v4_records,
+                IpAddr::V6(..) => &mut entry.v4_records,
+            };
+
+            if let Some(idx) = optimize_record.iter().position(|r| r.ip == *connected_ip) {
                 log::trace!(
                     "Moving connected IP {:?} to front in cache for address: {}",
                     connected_ip,
                     address
                 );
-                entry.addrs.rotate_left(idx);
+                optimize_record.rotate_left(idx);
                 log::trace!("Updated DNS cache entry for {}", address);
             }
         }
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use lru::LruCache;
-    use std::net::{IpAddr, Ipv4Addr};
-    use std::sync::Arc;
-    use tokio::sync::Mutex;
-
-    // 假设你的 CacheEntry 定义是这样的（根据你代码上下文推测）：
-    #[derive(Clone, Debug, PartialEq)]
-    struct CacheEntry {
-        pub addrs: Vec<IpAddr>,
-    }
-
-    // 假设你的 DnsClient 或测试目标结构体大致如下（简化版，仅含 ipv4_cache）
-    struct TestDnsClient {
-        ipv4_cache: Arc<tokio::sync::Mutex<lru::LruCache<String, CacheEntry>>>,
-    }
-
-    impl TestDnsClient {
-        fn new() -> Self {
-            // 创建一个容量为 10 的 LRU 缓存
-            let cache = lru::LruCache::new(std::num::NonZeroUsize::new(10).unwrap());
-            Self {
-                ipv4_cache: Arc::new(tokio::sync::Mutex::new(cache)),
-            }
+    async fn cache_insert(&self, host: &str, entry: CacheEntry) {
+        if entry.v4_records.is_empty() && entry.v6_records.is_empty() {
+            return;
         }
+        self.dns_cache.lock().await.put(host.to_owned(), entry);
+    }
 
-        // 模拟你的 optimize_cache_ipv4 方法
-        async fn optimize_cache_ipv4(&self, address: &str, connected_ip: &IpAddr) {
-            if address.parse::<IpAddr>().is_ok() {
-                return;
-            }
+    async fn get_cached(&self, host: &String, option: (bool, bool)) -> Result<Vec<IpAddr>> {
+        let mut cached_ips = Vec::new();
 
-            let mut cache_guard = self.ipv4_cache.lock().await;
-
-            if let Some(entry) = cache_guard.get_mut(address) {
-                if let Some(idx) = entry.addrs.iter().position(|&ip| ip == *connected_ip) {
-                    entry.addrs.rotate_left(idx);
-                    log::trace!("update Dns cache entry {} {}", address, connected_ip);
+        // Query caches in priority order
+        if let Some(entry) = self.dns_cache.lock().await.get(host) {
+            match option {
+                (true, true) => {
+                    cached_ips.extend(entry.get_valid_v6_addrs());
+                    cached_ips.extend(entry.get_valid_v4_addrs());
+                }
+                (true, false) => {
+                    cached_ips.extend(entry.get_valid_v4_addrs());
+                    cached_ips.extend(entry.get_valid_v6_addrs());
+                }
+                _ => {
+                    cached_ips.extend(entry.get_valid_v4_addrs());
                 }
             }
         }
-    }
 
-    #[tokio::test]
-    async fn test_optimize_cache_ipv4_moves_connected_ip_to_front() {
-        // 1. 准备测试对象
-        let client = TestDnsClient::new();
-
-        // 2. 准备测试数据
-        let domain = "example.com";
-        let ip1 = IpAddr::V4(Ipv4Addr::new(2, 2, 2, 2)); // 第二个 IP
-        let ip2 = IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)); // 我们希望它移动到第一个
-
-        let entry = CacheEntry {
-            addrs: vec![ip1, ip2], // 注意顺序：2.2.2.2, 1.1.1.1
-        };
-
-        // 3. 插入缓存
-        {
-            let mut cache = client.ipv4_cache.lock().await;
-            cache.put(domain.to_string(), entry);
-        }
-
-        // 4. 调用优化函数：connected_ip 是 1.1.1.1，当前在索引 1
-        let connected_ip = IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1));
-        client.optimize_cache_ipv4(domain, &connected_ip).await;
-
-        // 5. 检查缓存中的 entry 是否被正确修改
-        {
-            let mut cache = client.ipv4_cache.lock().await;
-            if let Some(entry) = cache.get(domain) {
-                // 期望 addrs 现在是 [1.1.1.1, 2.2.2.2]
-                let expected = vec![
-                    IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)),
-                    IpAddr::V4(Ipv4Addr::new(2, 2, 2, 2)),
-                ];
-                assert_eq!(entry.addrs, expected, "IPs were not reordered");
-            } else {
-                panic!(
-                    "Cache entry for domain '{}' not found after optimization",
-                    domain
-                );
-            }
+        // Return results or error if no cached IPs found
+        if !cached_ips.is_empty() {
+            Ok(cached_ips)
+        } else {
+            Err(anyhow!("empty result"))
         }
     }
 }
