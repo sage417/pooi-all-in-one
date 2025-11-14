@@ -5,9 +5,9 @@ use std::io::Result as IoResult;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::app::session::Session;
+use crate::{proxy::{OutboundDatagram, ProxyStream}, session::Session};
 use crate::proxy::{
-    AnyOutboundDatagram, AnyProxyStream, DatagramTransportType, OutboundConnect, OutboundTransport,
+    DatagramTransportType, OutboundConnect, OutboundTransport,
 };
 
 pub type SyncOutboundManager = Arc<RwLock<OutboundManager>>;
@@ -28,7 +28,7 @@ pub trait Color {
 }
 
 #[async_trait]
-pub trait OutboundStreamHandler<S = AnyProxyStream>: Send + Sync + Unpin {
+pub trait OutboundStreamHandler<S = Box<dyn ProxyStream>>: Send + Sync + Unpin {
     /// Returns the address which the underlying transport should
     /// communicate with.
     fn connect_addr(&self) -> OutboundConnect;
@@ -47,7 +47,7 @@ type AnyOutboundStreamHandler = Box<dyn OutboundStreamHandler>;
 
 /// An outbound handler for outgoing UDP connections.
 #[async_trait]
-pub trait OutboundDatagramHandler<S = AnyProxyStream, D = AnyOutboundDatagram>:
+pub trait OutboundDatagramHandler<S = Box<dyn ProxyStream>, D = Box<dyn OutboundDatagram>>:
     Send + Sync + Unpin
 {
     /// Returns the address which the underlying transport should
@@ -66,9 +66,7 @@ pub trait OutboundDatagramHandler<S = AnyProxyStream, D = AnyOutboundDatagram>:
     ) -> IoResult<D>;
 }
 
-type AnyOutboundDatagramHandler = Box<dyn OutboundDatagramHandler>;
-
 pub trait OutboundHandler: Tag + Color + Sync + Send + Unpin {
     fn stream(&self) -> IoResult<&AnyOutboundStreamHandler>;
-    fn datagram(&self) -> IoResult<&AnyOutboundDatagramHandler>;
+    fn datagram(&self) -> IoResult<&Box<dyn OutboundDatagramHandler>>;
 }

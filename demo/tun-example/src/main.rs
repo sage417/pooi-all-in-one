@@ -5,6 +5,7 @@ mod proxy;
 mod config {
     include!(concat!(env!("OUT_DIR"), "/config.rs"));
 }
+mod session;
 
 use futures::future;
 use std::pin::{Pin, pin};

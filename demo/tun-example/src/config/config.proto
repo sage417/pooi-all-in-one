@@ -9,7 +9,7 @@ message Dns {
 		repeated string values = 1;
 	}
 
-	repeated string listen_addrs = 1;
+	repeated string upstreams  = 1;
 	map<string, Ips> hosts = 3;
 }
 

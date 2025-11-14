@@ -1,7 +1,8 @@
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::app::{dns::SyncDnsClient, session::Session};
+use crate::app::{dns::SyncDnsClient};
+use crate::session::Session;
 
 pub type SyncRouter = Arc<RwLock<Router>>;
 

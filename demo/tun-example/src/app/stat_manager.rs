@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64};
 use tokio::sync::RwLock;
 
-use crate::app::session::Session;
+use crate::session::Session;
 
 pub type SyncStatManager = Arc<RwLock<StatManager>>;
 

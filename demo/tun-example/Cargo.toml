@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 ctrlc2 = "3.7"
 pnet_packet = "0.35"
-tokio = { version = "1.48", features = ["rt-multi-thread", "macros", "signal", "sync"] }
+tokio = { version = "1.48", features = ["rt-multi-thread", "macros", "signal", "sync", "time"] }
 tun-rs = { version = "2", features = ["async"] }
 
 # Log
@@ -24,6 +24,8 @@ futures = "0.3.31"
 async-trait = "0.1.89"
 colored = "3.0.0"
 prost = "0.14"
+hickory-proto = "0.25.2"
+async-recursion = "1.1.1"
 
 [build-dependencies]
 prost-build = "0.14"
