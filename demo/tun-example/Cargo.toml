@@ -20,12 +20,13 @@ thiserror = "2.0.17"
 # Utility
 lazy_static = "1.5.0"
 lru = "0.16.2"
-futures = "0.3.31"
 async-trait = "0.1.89"
 colored = "3.0.0"
 prost = "0.14"
 hickory-proto = "0.25.2"
 async-recursion = "1.1.1"
+futures = "0.3.31"
+tokio-util = "0.7.17"
 
 [build-dependencies]
 prost-build = "0.14"

@@ -1,13 +1,12 @@
 use anyhow::{Result, anyhow};
 use lru::LruCache;
-use pnet_packet::ip;
 
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 use std::{collections::HashMap, num::NonZeroUsize};
 use tokio::sync::{Mutex, RwLock};
-
+#[allow(unused_imports)]
 use hickory_proto::{
     op::{
         Message, header::MessageType, op_code::OpCode, query::Query, response_code::ResponseCode,
@@ -17,7 +16,7 @@ use hickory_proto::{
 
 use super::dispatcher::Dispatcher;
 use crate::{
-    proxy::{datagram::*, *},
+    proxy::{datagram::*},
     session::*,
 };
 
@@ -48,6 +47,7 @@ struct DnsRecord {
 }
 
 impl CacheEntry {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             v4_records: Vec::new(),
@@ -55,6 +55,7 @@ impl CacheEntry {
         }
     }
 
+    #[allow(dead_code)]
     pub fn add_record(&mut self, ip: IpAddr, ttl: Duration) {
         let record = DnsRecord::new(ip, ttl);
         match ip {
@@ -63,6 +64,7 @@ impl CacheEntry {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_valid_v4_addrs(&self) -> Vec<IpAddr> {
         self.v4_records
             .iter()
@@ -71,6 +73,7 @@ impl CacheEntry {
             .collect()
     }
 
+    #[allow(dead_code)]
     pub fn get_valid_v6_addrs(&self) -> Vec<IpAddr> {
         self.v6_records
             .iter()
@@ -81,6 +84,7 @@ impl CacheEntry {
 }
 
 impl DnsRecord {
+    #[allow(dead_code)]
     pub fn new(ip: IpAddr, ttl: Duration) -> Self {
         Self {
             ip,
@@ -89,12 +93,15 @@ impl DnsRecord {
         }
     }
 
+    #[allow(dead_code)]
     pub fn is_expired(&self) -> bool {
         Instant::now() > self.deadline
     }
 }
 
 impl DnsClient {
+
+    #[allow(dead_code)]
     pub fn new(dns_config: &crate::config::Dns) -> Result<Self> {
         if dns_config.upstreams.is_empty() {
             return Err(anyhow!("empty listening address"));
@@ -126,10 +133,12 @@ impl DnsClient {
         });
     }
 
+    #[allow(dead_code)]
     pub fn replace_dispatcher(&mut self, dispatcher: Weak<Dispatcher>) {
         self.dispatcher.replace(dispatcher);
     }
 
+    #[allow(dead_code)]
     pub async fn optimize_dns_cache(&self, address: &str, connected_ip: IpAddr) {
         // Nothing to do if the target address is an IP address.
         if address.parse::<IpAddr>().is_ok() {
@@ -157,6 +166,7 @@ impl DnsClient {
         }
     }
 
+    #[allow(dead_code)]
     async fn cache_insert(&self, host: &str, entry: CacheEntry) {
         if entry.v4_records.is_empty() && entry.v6_records.is_empty() {
             return;
@@ -164,6 +174,7 @@ impl DnsClient {
         self.dns_cache.lock().await.put(host.to_owned(), entry);
     }
 
+    #[allow(dead_code)]
     async fn get_cached(&self, host: &str, options: (bool, bool)) -> Result<Vec<IpAddr>> {
         let mut cached_ips = Vec::new();
 
@@ -192,10 +203,13 @@ impl DnsClient {
         }
     }
 
+    #[allow(dead_code)]
     pub async fn direct_lookup(&self, host: &String) -> Result<Vec<IpAddr>> {
+        let _ = host;
         Ok(vec![])
     }
 
+    #[allow(dead_code)]
     async fn query_task(
         &self,
         is_direct: bool,
@@ -285,16 +299,14 @@ impl DnsClient {
             let mut ips = Vec::new();
             for ans in resp.answers() {
                 // TODO checks?
-                if let data = ans.data() {
-                    match data {
-                        RData::A(ip) => {
-                            ips.push(IpAddr::V4(**ip));
-                        }
-                        RData::AAAA(ip) => {
-                            ips.push(IpAddr::V6(**ip));
-                        }
-                        _ => (),
+                match ans.data() {
+                    RData::A(ip) => {
+                        ips.push(IpAddr::V4(**ip));
                     }
+                    RData::AAAA(ip) => {
+                        ips.push(IpAddr::V6(**ip));
+                    }
+                    _ => (),
                 }
             }
 
@@ -317,7 +329,7 @@ impl DnsClient {
                 elapsed.as_millis(),
             );
 
-            let Some(deadline) = Instant::now().checked_add(Duration::from_secs(ttl.into())) else {
+            let Some(_) = Instant::now().checked_add(Duration::from_secs(ttl.into())) else {
                 last_err = Some(anyhow!("invalid ttl"));
                 break;
             };

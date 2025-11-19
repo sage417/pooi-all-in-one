@@ -1,5 +1,4 @@
 mod app;
-mod outbound;
 mod protocol_handle;
 mod proxy;
 mod config {
@@ -7,13 +6,24 @@ mod config {
 }
 mod session;
 
-use futures::future;
-use std::pin::{Pin, pin};
+#[allow(unused_imports)]
 use std::{net::Ipv4Addr, time::Duration};
+use std::{pin::Pin, sync::Arc};
 use thiserror::Error;
-use tokio::sync::mpsc::Sender as TokioSender;
-use tokio::sync::{RwLock, mpsc};
+#[allow(unused_imports)]
+use tokio::sync::RwLock;
+use tokio::sync::oneshot::Sender;
+use tokio_util::sync::CancellationToken;
 
+#[allow(unused_imports)]
+use crate::app::dns::DnsClient;
+use crate::app::{
+    dns::SyncDnsClient,
+    inbound::handler::{InboundManager, SimpleInboundHandlerFactory},
+    outbound::manager::SyncOutboundManager,
+    router::SyncRouter,
+    stat_manager::SyncStatManager,
+};
 #[cfg(any(
     target_os = "windows",
     all(target_os = "linux", not(target_env = "ohos")),
@@ -22,15 +32,10 @@ use tokio::sync::{RwLock, mpsc};
     target_os = "openbsd",
     target_os = "netbsd",
 ))]
+#[allow(unused_imports)]
 use tun_rs::DeviceBuilder;
 #[allow(unused_imports)]
 use tun_rs::{AsyncDevice, SyncDevice};
-
-use crate::app::dns::DnsClient;
-use crate::app::{
-    dns::SyncDnsClient, outbound::manager::SyncOutboundManager, router::SyncRouter,
-    stat_manager::SyncStatManager,
-};
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -61,36 +66,74 @@ pub struct RuntimeManager {
     dns_client: SyncDnsClient,
     outbound_manager: SyncOutboundManager,
     stat_manager: SyncStatManager,
-    shutdown_tx: TokioSender<()>,
+    shutdown_tx: Sender<()>,
 }
 
 pub fn start() -> Result<(), Error> {
-    let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
+    let (shutdown_tx, mut shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+
+    // let rt_manager = RuntimeManager{};
 
     let rt = new_runtime()?;
 
     log::info!("runtime worker num: {:?}", rt.metrics().num_workers());
 
-    // pub type Runner = futures::future::BoxFuture<'static, ()>;
-    let mut services: Vec<Pin<&mut dyn Future<Output = ()>>> = Vec::new();
-    let mut tasks: Vec<Pin<&mut dyn Future<Output = ()>>> = Vec::new();
+    rt.block_on(async {
+        let mut inbound_handles;
 
-    // let dns_client = Arc::new(RwLock::new(
-    //     DnsClient::new(&config.dns).map_err(Error::Config)?,
-    // ));
+        loop {
+            let cancel_token = CancellationToken::new();
 
-    let t_1 = pin!(async move {
-        let _ = tokio::signal::ctrl_c().await;
-        log::info!("recv ctrl_c quiting...");
+            let inbound_manager = InboundManager::new(
+                vec![crate::config::Inbound {
+                    address: String::from("127.0.0.1"),
+                    port: 8888,
+                    protocol: String::from("tcp"),
+                    tag: String::from(""),
+                    settings: vec![],
+                }],
+                Arc::new(SimpleInboundHandlerFactory {}),
+            );
+
+            inbound_handles = inbound_manager
+                .start_all(cancel_token.clone())
+                .await
+                .expect("Failed to start inbound handlers");
+
+            #[cfg(unix)]
+            {
+                use tokio::signal::unix::{Signal, SignalKind, signal};
+                // tokio::signal::ctrl_c()
+                let ctrl_c = tokio::signal::ctrl_c();
+                let mut sighup = signal(SignalKind::hangup()).unwrap();
+
+                tokio::select! {
+                    _ = ctrl_c => {
+                        log::info!("Received Ctrl+C, shutting down gracefully...");
+                        cancel_token.cancel();
+                        break;
+                    }
+                    _ = sighup.recv() => {
+                        log::info!("Received SIGHUP, reloading configuration...");
+                        continue;
+                    }
+                }
+            }
+
+            #[cfg(not(unix))]
+            {
+                let _ = tokio::signal::ctrl_c().await;
+                log::info!("Received Ctrl+C, shutting down (no SIGHUP on Windows)");
+                break;
+            }
+        }
+
+        for handle in inbound_handles {
+            let _ = handle.await;
+        }
+
+        // close inbound manager
     });
-    tasks.push(t_1);
-
-    let t_2 = pin!(async move {
-        let _ = shutdown_rx.recv().await;
-    });
-    tasks.push(t_2);
-
-    rt.block_on(future::select_all(tasks));
 
     rt.shutdown_timeout(Duration::from_secs(1));
 

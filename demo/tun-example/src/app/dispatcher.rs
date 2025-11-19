@@ -6,6 +6,7 @@ use crate::{
     proxy::{MockOutboundDatagram, OutboundDatagram},
     session::Session,
 };
+#[allow(unused_imports)]
 use async_recursion::async_recursion;
 use std::io;
 
@@ -23,6 +24,7 @@ impl Dispatcher {
         &self,
         mut sess: Session,
     ) -> io::Result<Box<dyn OutboundDatagram>> {
+        let _ = sess;
         io::Result::Ok(Box::new(MockOutboundDatagram{}))
     }
 }

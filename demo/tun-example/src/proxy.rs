@@ -12,6 +12,7 @@ pub trait ProxyStream: AsyncRead + AsyncWrite + Send + Sync + Unpin {}
 
 impl<S> ProxyStream for S where S: AsyncRead + AsyncWrite + Send + Sync + Unpin {}
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum OutboundConnect {
     Proxy(TransportProtocol, String, u16),
@@ -20,6 +21,7 @@ pub enum OutboundConnect {
     Unknown,
 }
 
+#[allow(dead_code)]
 #[derive(Error, Debug)]
 pub enum ProxyError {
     #[error(transparent)]
@@ -28,6 +30,7 @@ pub enum ProxyError {
     DatagramFatal(anyhow::Error),
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum DatagramTransportType {
     Reliable,
@@ -36,6 +39,7 @@ pub enum DatagramTransportType {
 }
 
 /// The receive half.
+#[allow(dead_code)]
 #[async_trait]
 pub trait OutboundDatagramRecvHalf: Sync + Send + Unpin {
     /// Receives a message on the socket. On success, returns the number of
@@ -44,6 +48,7 @@ pub trait OutboundDatagramRecvHalf: Sync + Send + Unpin {
 }
 
 /// The send half.
+#[allow(dead_code)]
 #[async_trait]
 pub trait OutboundDatagramSendHalf: Sync + Send + Unpin {
     /// Sends a message on the socket to `dst_addr`. On success, returns the
@@ -66,6 +71,7 @@ pub trait OutboundDatagram: Send + Unpin {
 }
 
 /// An outbound transport represents either a reliable or unreliable transport.
+#[allow(dead_code)]
 pub enum OutboundTransport<S, D> {
     /// The reliable transport.
     Stream(S),
@@ -74,6 +80,7 @@ pub enum OutboundTransport<S, D> {
 }
 
 /// An unreliable transport for inbound handlers.
+#[allow(dead_code)]
 pub trait InboundDatagram: Send + Sync + Unpin {
     /// Splits the datagram.
     fn split(
@@ -87,10 +94,12 @@ pub trait InboundDatagram: Send + Sync + Unpin {
     fn into_std(self: Box<Self>) -> IoResult<std::net::UdpSocket>;
 }
 
+#[allow(dead_code)]
 pub type ProxyResult<T> = Result<T, ProxyError>;
 
 pub type StreamId = u64;
 
+#[allow(dead_code)]
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct DatagramSource {
     pub address: SocketAddr,
@@ -99,6 +108,7 @@ pub struct DatagramSource {
 }
 
 /// The receive half.
+#[allow(dead_code)]
 #[async_trait]
 pub trait InboundDatagramRecvHalf: Sync + Send + Unpin {
     /// Receives a single datagram message on the socket. On success, returns
@@ -111,6 +121,7 @@ pub trait InboundDatagramRecvHalf: Sync + Send + Unpin {
 }
 
 /// The send half.
+#[allow(dead_code)]
 #[async_trait]
 pub trait InboundDatagramSendHalf: Sync + Send + Unpin {
     /// Sends a datagram message on the socket to `dst_addr`, the `src_addr`
@@ -128,6 +139,7 @@ pub trait InboundDatagramSendHalf: Sync + Send + Unpin {
 }
 
 impl DatagramSource {
+    #[allow(dead_code)]
     pub fn new(address: SocketAddr, stream_id: Option<StreamId>) -> Self {
         DatagramSource {
             address,
@@ -136,6 +148,7 @@ impl DatagramSource {
         }
     }
 
+    #[allow(dead_code)]
     pub fn new_with_process_name(
         address: SocketAddr,
         stream_id: Option<StreamId>,

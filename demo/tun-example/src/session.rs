@@ -5,6 +5,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
 
 pub type StreamId = u64;
 
+#[allow(dead_code)]
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum TransportProtocol {
     Tcp,
@@ -68,12 +69,4 @@ impl Default for Session {
             new_conn_once: false,
         }
     }
-}
-
-
-#[derive(PartialEq, Eq, Hash, Clone, Debug)]
-pub struct DatagramSource {
-    pub address: SocketAddr,
-    pub stream_id: Option<StreamId>,
-    pub process_name: Option<String>,
 }

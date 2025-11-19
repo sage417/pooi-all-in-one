@@ -5,10 +5,10 @@ use std::io::Result as IoResult;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::{proxy::{OutboundDatagram, ProxyStream}, session::Session};
 use crate::proxy::{
-    DatagramTransportType, OutboundConnect, OutboundTransport,
+    DatagramTransportType, OutboundConnect, OutboundDatagram, OutboundTransport, ProxyStream,
 };
+use crate::session::Session;
 
 pub type SyncOutboundManager = Arc<RwLock<OutboundManager>>;
 
@@ -19,14 +19,17 @@ pub struct OutboundManager {
     abort_handles: Vec<AbortHandle>,
 }
 
+#[allow(dead_code)]
 pub trait Tag {
     fn tag(&self) -> &String;
 }
 
+#[allow(dead_code)]
 pub trait Color {
     fn color(&self) -> &colored::Color;
 }
 
+#[allow(dead_code)]
 #[async_trait]
 pub trait OutboundStreamHandler<S = Box<dyn ProxyStream>>: Send + Sync + Unpin {
     /// Returns the address which the underlying transport should
@@ -43,6 +46,7 @@ pub trait OutboundStreamHandler<S = Box<dyn ProxyStream>>: Send + Sync + Unpin {
     ) -> IoResult<S>;
 }
 
+#[allow(dead_code)]
 type AnyOutboundStreamHandler = Box<dyn OutboundStreamHandler>;
 
 /// An outbound handler for outgoing UDP connections.
@@ -52,13 +56,16 @@ pub trait OutboundDatagramHandler<S = Box<dyn ProxyStream>, D = Box<dyn Outbound
 {
     /// Returns the address which the underlying transport should
     /// communicate with.
+    #[allow(dead_code)]
     fn connect_addr(&self) -> OutboundConnect;
 
     /// Returns the transport type of this handler.
+    #[allow(dead_code)]
     fn transport_type(&self) -> DatagramTransportType;
 
     /// Handles a session with the transport. On success, returns an outbound
     /// datagram wraps the incoming transport.
+    #[allow(dead_code)]
     async fn handle<'a>(
         &'a self,
         sess: &'a Session,
@@ -66,6 +73,7 @@ pub trait OutboundDatagramHandler<S = Box<dyn ProxyStream>, D = Box<dyn Outbound
     ) -> IoResult<D>;
 }
 
+#[allow(dead_code)]
 pub trait OutboundHandler: Tag + Color + Sync + Send + Unpin {
     fn stream(&self) -> IoResult<&AnyOutboundStreamHandler>;
     fn datagram(&self) -> IoResult<&Box<dyn OutboundDatagramHandler>>;

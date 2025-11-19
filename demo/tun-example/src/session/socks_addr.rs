@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 use std::{
     fmt,
     io::{Error as IoError, ErrorKind as IoErrorKind, Result as IoResult},
@@ -19,10 +20,12 @@ impl SocksAddr {
         Self::Ip(SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0))
     }
 
+    #[allow(dead_code)]
     pub fn any_ipv6() -> Self {
         Self::Ip(SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0))
     }
 
+    #[allow(dead_code)]
     pub fn must_ip(&self) -> &SocketAddr {
         match self {
             SocksAddr::Ip(a) => a,
@@ -32,6 +35,7 @@ impl SocksAddr {
         }
     }
 
+    #[allow(dead_code)]
     pub fn size(&self) -> usize {
         match self {
             Self::Ip(addr) => match addr {
@@ -42,6 +46,7 @@ impl SocksAddr {
         }
     }
 
+    #[allow(dead_code)]
     pub fn port(&self) -> u16 {
         match self {
             SocksAddr::Ip(addr) => addr.port(),
@@ -49,6 +54,7 @@ impl SocksAddr {
         }
     }
 
+    #[allow(dead_code)]
     pub fn is_domain(&self) -> bool {
         match self {
             SocksAddr::Ip(_) => false,
@@ -56,6 +62,7 @@ impl SocksAddr {
         }
     }
 
+    #[allow(dead_code)]
     pub fn domain(&self) -> Option<&String> {
         if let SocksAddr::Domain(domain, _) = self {
             Some(domain)
@@ -64,6 +71,7 @@ impl SocksAddr {
         }
     }
 
+    #[allow(dead_code)]
     pub fn ip(&self) -> Option<IpAddr> {
         if let SocksAddr::Ip(addr) = self {
             Some(addr.ip())
@@ -72,6 +80,7 @@ impl SocksAddr {
         }
     }
 
+    #[allow(dead_code)]
     pub fn host(&self) -> String {
         match self {
             SocksAddr::Ip(addr) => {
@@ -174,14 +183,17 @@ impl TryFrom<(String, u16)> for SocksAddr {
     }
 }
 
+#[allow(dead_code)]
 fn insuff_bytes() -> IoError {
     IoError::new(IoErrorKind::Other, "insufficient bytes")
 }
 
+#[allow(dead_code)]
 fn invalid_domain() -> IoError {
     IoError::new(IoErrorKind::Other, "invalid domain")
 }
 
+#[allow(dead_code)]
 fn invalid_addr_type() -> IoError {
     IoError::new(IoErrorKind::Other, "invalid address type")
 }
