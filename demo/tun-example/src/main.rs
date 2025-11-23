@@ -18,12 +18,11 @@ use tokio_util::sync::CancellationToken;
 #[allow(unused_imports)]
 use crate::app::dns::DnsClient;
 use crate::app::{
-    dns::SyncDnsClient,
-    inbound::handler::{InboundManager, SimpleInboundHandlerFactory},
-    outbound::manager::SyncOutboundManager,
-    router::SyncRouter,
+    dns::SyncDnsClient, outbound::manager::SyncOutboundManager, router::SyncRouter,
     stat_manager::SyncStatManager,
 };
+use crate::proxy::inbound::{InboundManager, SimpleInboundHandlerFactory};
+
 #[cfg(any(
     target_os = "windows",
     all(target_os = "linux", not(target_env = "ohos")),
@@ -69,31 +68,29 @@ pub struct RuntimeManager {
     shutdown_tx: Sender<()>,
 }
 
-pub fn start() -> Result<(), Error> {
-    let (shutdown_tx, mut shutdown_rx) = tokio::sync::oneshot::channel::<()>();
-
+pub fn start_service() -> Result<(), Error> {
     // let rt_manager = RuntimeManager{};
 
     let rt = new_runtime()?;
-
     log::info!("runtime worker num: {:?}", rt.metrics().num_workers());
 
     rt.block_on(async {
         let mut inbound_handles;
+        let mut inbound_manager: InboundManager;
 
         loop {
-            let cancel_token = CancellationToken::new();
-
-            let inbound_manager = InboundManager::new(
+            inbound_manager = InboundManager::new(
                 vec![crate::config::Inbound {
-                    address: String::from("127.0.0.1"),
+                    address: String::from("192.168.31.1"),
                     port: 8888,
-                    protocol: String::from("tcp"),
+                    protocol: String::from("socks"),
                     tag: String::from(""),
                     settings: vec![],
                 }],
                 Arc::new(SimpleInboundHandlerFactory {}),
             );
+
+            let cancel_token = CancellationToken::new();
 
             inbound_handles = inbound_manager
                 .start_all(cancel_token.clone())
@@ -102,8 +99,8 @@ pub fn start() -> Result<(), Error> {
 
             #[cfg(unix)]
             {
-                use tokio::signal::unix::{Signal, SignalKind, signal};
-                // tokio::signal::ctrl_c()
+                use tokio::signal::unix::{SignalKind, signal};
+
                 let ctrl_c = tokio::signal::ctrl_c();
                 let mut sighup = signal(SignalKind::hangup()).unwrap();
 
@@ -124,15 +121,12 @@ pub fn start() -> Result<(), Error> {
             {
                 let _ = tokio::signal::ctrl_c().await;
                 log::info!("Received Ctrl+C, shutting down (no SIGHUP on Windows)");
+                cancel_token.cancel();
                 break;
             }
         }
 
-        for handle in inbound_handles {
-            let _ = handle.await;
-        }
-
-        // close inbound manager
+        let _ = futures::future::join_all(inbound_handles);
     });
 
     rt.shutdown_timeout(Duration::from_secs(1));
@@ -159,41 +153,39 @@ fn new_runtime() -> Result<tokio::runtime::Runtime, Error> {
     target_os = "netbsd",
 ))]
 // #[tokio::main]
+// let dev = Arc::new(
+//     DeviceBuilder::new()
+//         .name("utun0")
+//         .ipv4(Ipv4Addr::new(203, 0, 113, 1), 30, None)
+//         // .ipv6("CDCD:910A:2222:5498:8475:1111:3900:2021", 64)
+//         // .offload(true)
+//         .mtu(1420)
+//         .build_async()?,
+// );
+
+// log::info!("name:{:?}", dev.name()?);
+// log::info!("addresses:{:?}", dev.addresses()?);
+// let size = dev.mtu()? as usize;
+// log::info!("mtu:{size:?}",);
+// let mut buf = vec![0; size];
+// loop {
+//     tokio::select! {
+//         _ = tokio::signal::ctrl_c() => {
+//             log::info!("Quit...");
+//             break;
+//         }
+//         len = dev.recv(&mut buf) => {
+//             let len = len?;
+//             log::info!("raw packet header (first 20B): {:02x?}", &buf[..std::cmp::min(len, 20)]);
+//             //println!("pkt: {:?}", &buf[..len?]);
+//             handle_pkt(&buf[..len], &dev).await?;
+//         }
+//     }
+// }
+// Ok(())
 fn main() -> Result<(), Error> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).init();
-
-    // let dev = Arc::new(
-    //     DeviceBuilder::new()
-    //         .name("utun0")
-    //         .ipv4(Ipv4Addr::new(203, 0, 113, 1), 30, None)
-    //         // .ipv6("CDCD:910A:2222:5498:8475:1111:3900:2021", 64)
-    //         // .offload(true)
-    //         .mtu(1420)
-    //         .build_async()?,
-    // );
-
-    // log::info!("name:{:?}", dev.name()?);
-    // log::info!("addresses:{:?}", dev.addresses()?);
-    // let size = dev.mtu()? as usize;
-    // log::info!("mtu:{size:?}",);
-    // let mut buf = vec![0; size];
-    // loop {
-    //     tokio::select! {
-    //         _ = tokio::signal::ctrl_c() => {
-    //             log::info!("Quit...");
-    //             break;
-    //         }
-    //         len = dev.recv(&mut buf) => {
-    //             let len = len?;
-    //             log::info!("raw packet header (first 20B): {:02x?}", &buf[..std::cmp::min(len, 20)]);
-    //             //println!("pkt: {:?}", &buf[..len?]);
-    //             handle_pkt(&buf[..len], &dev).await?;
-    //         }
-    //     }
-    // }
-    // Ok(())
-
-    start()
+    start_service()
 }
 
 #[cfg(feature = "async_io")]

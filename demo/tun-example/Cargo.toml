@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 ctrlc2 = "3.7"
 pnet_packet = "0.35"
+socket2 = "0.6.1"
 tokio = { version = "1.48", features = ["rt-multi-thread", "macros", "signal", "sync", "time"] }
 tun-rs = { version = "2", features = ["async"] }
 
@@ -18,14 +19,15 @@ anyhow = "1.0.100"
 thiserror = "2.0.17"
 
 # Utility
+async-recursion = "1.1.1"
+async-trait = "0.1.89"
+bytes = "1.11.0"
+colored = "3.0.0"
+futures = "0.3.31"
+hickory-proto = "0.25.2"
 lazy_static = "1.5.0"
 lru = "0.16.2"
-async-trait = "0.1.89"
-colored = "3.0.0"
 prost = "0.14"
-hickory-proto = "0.25.2"
-async-recursion = "1.1.1"
-futures = "0.3.31"
 tokio-util = "0.7.17"
 
 [build-dependencies]

@@ -1,4 +1,4 @@
-pub mod socks_addr;
+pub(crate) mod socks_addr;
 
 pub use crate::session::socks_addr::SocksAddr;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};

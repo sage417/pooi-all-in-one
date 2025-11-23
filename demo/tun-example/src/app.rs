@@ -1,8 +1,5 @@
-pub mod router;
-pub mod dns;
-pub mod dispatcher;
-pub mod stat_manager;
-pub mod outbound;
-pub mod inbound {
-    pub mod handler;
-}
+pub(super) mod router;
+pub(super) mod dns;
+pub(super) mod dispatcher;
+pub(super) mod stat_manager;
+pub(super) mod outbound;

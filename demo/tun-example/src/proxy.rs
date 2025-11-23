@@ -1,4 +1,5 @@
-pub mod datagram;
+pub(super) mod inbound;
+pub(super) mod datagram;
 
 use async_trait::async_trait;
 use std::{fmt, io::Result as IoResult, net::SocketAddr};
