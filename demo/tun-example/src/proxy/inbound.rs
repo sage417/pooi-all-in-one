@@ -133,7 +133,7 @@ impl InboundHandlerFactory for SimpleInboundHandlerFactory {
                 let authenticator = Arc::new(SimpleAuthenticator::new(
                     "admin".into(),
                     "123456".into(),
-                    false, 
+                    true, 
                 ));
                 Ok(Box::new(SocksInboundHandler::new(authenticator)))
             },
