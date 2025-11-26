@@ -22,7 +22,7 @@
         <!-- 2021.0.x aka Jubilee	2.6.x, 2.7.x (Starting with 2021.0.3)-->
         <spring-cloud.version>2021.0.9</spring-cloud.version>
         <skywalking-java-agent.version>9.5.0</skywalking-java-agent.version>
-        <dynamicTp.version>1.2.2</dynamicTp.version>
+        <dynamicTp.version>1.2.2-x</dynamicTp.version>
     </properties>
     <dependencies>
 
