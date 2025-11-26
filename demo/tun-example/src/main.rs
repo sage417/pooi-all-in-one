@@ -81,7 +81,7 @@ pub fn start_service() -> Result<(), Error> {
         loop {
             inbound_manager = InboundManager::new(
                 vec![crate::config::Inbound {
-                    address: String::from("192.168.31.1"),
+                    address: String::from("192.168.158.151"),
                     port: 8888,
                     protocol: String::from("socks"),
                     tag: String::from(""),
@@ -184,7 +184,23 @@ fn new_runtime() -> Result<tokio::runtime::Runtime, Error> {
 // }
 // Ok(())
 fn main() -> Result<(), Error> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
+        .format(|buf, record| {
+            use std::io::Write;
+
+            let timestamp = buf.timestamp();
+            let level = record.level();
+            let file = record.file().unwrap_or("unknown");
+            let line = record.line().unwrap_or(0);
+            let args = record.args();
+
+            writeln!(
+                buf,
+                "{} {:>5} [{}:{}] {}",
+                timestamp, level, file, line, args
+            )
+        })
+        .init();
     start_service()
 }
 

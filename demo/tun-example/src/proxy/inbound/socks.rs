@@ -1,46 +1,47 @@
+use async_trait::async_trait;
+use bytes::{BufMut, BytesMut};
+use socket2::{Domain, Protocol, Socket, Type};
 use std::{
-    io,
-    net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
+    io::{Error as IoError, ErrorKind as IoErrorKind, Result as IoResult},
+    net::{Ipv4Addr, Ipv6Addr, SocketAddr},
     sync::Arc,
 };
-
-use bytes::{BufMut, BytesMut};
+use thiserror::Error;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpStream,
+    net::{TcpStream, UdpSocket},
 };
 
-use crate::session::{SocksAddr, socks_addr};
-
 use super::InboundHandler;
+use crate::session::SocksAddr;
 
 // RFC 1928
 const SOCKS5_VER: u8 = 0x05;
 // RFC 1929
 const SOCKS5_AUTH_VER: u8 = 0x01;
 
-pub(crate) mod auth_methods {
+pub(super) mod auth_methods {
     pub const NO_AUTHENTICATION_REQUIRED: u8 = 0x00;
     pub const USERNAME_PASSWORD: u8 = 0x02;
     pub const NO_ACCEPTABLE_METHODS: u8 = 0xff;
 }
 
 #[allow(dead_code)]
-pub(crate) mod socks_command {
+pub(super) mod socks_command {
     pub const CONNECT: u8 = 0x01;
     pub const BIND: u8 = 0x02;
     pub const UDP_ASSOCIATE: u8 = 0x03;
 }
 
 #[allow(dead_code)]
-pub(crate) mod atype {
+pub(super) mod atype {
     pub const IPV4: u8 = 0x01;
     pub const DOMAIN: u8 = 0x03;
     pub const IPV6: u8 = 0x04;
 }
 
 #[allow(dead_code)]
-pub(crate) mod response_code {
+pub(super) mod response_code {
     pub const SUCCEEDED: u8 = 0x00;
     pub const FAILURE: u8 = 0x01;
     pub const RULE_FAILURE: u8 = 0x02;
@@ -52,8 +53,41 @@ pub(crate) mod response_code {
     pub const ADDR_TYPE_NOT_SUPPORTED: u8 = 0x08;
 }
 
+type SocksResult<T> = Result<T, SocksError>;
+
+#[derive(Error, Debug)]
+pub enum SocksError {
+    #[error("IO error: {0}")]
+    Io(#[from] IoError),
+    #[error("Invalid SOCKS version: expected {expected}, got {got}")]
+    InvalidVersion { expected: u8, got: u8 },
+    #[error("No acceptable authentication methods")]
+    NoAcceptableMethods,
+    #[error("Authentication failed for user: {username}")]
+    AuthFailed { username: String },
+    #[error("Invalid UTF-8 in {field}")]
+    InvalidUtf8 { field: &'static str },
+    #[error("Command not supported: 0x{code:02x}")]
+    CommandNotSupported { code: u8 },
+    #[error("Address type not supported: 0x{atype:02x}")]
+    AddrTypeNotSupported { atype: u8 },
+    #[error("Domain length invalid: {len}")]
+    InvalidDomainLength { len: usize },
+    #[error("UDP packet too short")]
+    UdpPacketTooShort,
+    #[error("UDP packet invalid")]
+    UdpPacketInvalid,
+}
+
 pub(super) struct SocksInboundHandler {
     authenticator: Arc<dyn Authenticator>,
+    buf: BytesMut,
+}
+
+#[derive(Debug, Clone)]
+struct UdpAssociateSession {
+    client_addr: SocketAddr,
+    udp_socket: Arc<UdpSocket>,
 }
 
 pub trait Authenticator: Send + Sync {
@@ -69,25 +103,10 @@ pub(super) struct SimpleAuthenticator {
 
 impl SocksInboundHandler {
     pub fn new(authenticator: Arc<dyn Authenticator>) -> Self {
-        Self { authenticator }
+        Self { authenticator, buf: BytesMut::new() }
     }
 
-    fn reject_connection(
-        kind: io::ErrorKind,
-        message: impl Into<String>,
-        addr: std::net::SocketAddr,
-    ) -> io::Error {
-        io::Error::new(
-            kind,
-            format!(
-                "Rejected SOCKS5 connection: {} (remote_addr={})",
-                message.into(),
-                addr
-            ),
-        )
-    }
-
-    async fn handle_handshake(&self, stream: &mut TcpStream) -> io::Result<()> {
+    async fn handle_handshake(&mut self, stream: &mut TcpStream) -> SocksResult<()> {
         // +----+----------+----------+
         // |VER | NMETHODS | METHODS  |
         // +----+----------+----------+
@@ -95,126 +114,115 @@ impl SocksInboundHandler {
         // +----+----------+----------+
 
         // 1) Handshake / Method Selection
-        let mut buf = BytesMut::new();
+        let buf = &mut self.buf;
+
+        buf.resize(2, 0);
+        stream.read_exact(buf.as_mut()).await?;
+
+        if buf[0] != SOCKS5_VER {
+            return Err(SocksError::InvalidVersion {
+                expected: SOCKS5_VER,
+                got: buf[0],
+            });
+        }
+
+        let n_methods = buf[1] as usize;
+        if n_methods == 0 {
+            return Err(SocksError::NoAcceptableMethods);
+        }
+
+        buf.resize(n_methods, 0);
+        stream.read_exact(buf.as_mut()).await?;
+
+        let client_methods = &buf[..];
+
+        // NO_ACCEPTABLE_METHODS
+        if (self.authenticator.enabled()
+            && !client_methods.contains(&auth_methods::USERNAME_PASSWORD))
+            || !client_methods.contains(&auth_methods::NO_AUTHENTICATION_REQUIRED)
         {
+            stream
+                .write_all(&[SOCKS5_VER, auth_methods::NO_ACCEPTABLE_METHODS])
+                .await?;
+            stream.shutdown().await?;
+            return Err(SocksError::NoAcceptableMethods);
+        }
+        // choose suitable auth method
+        let auth_method = if self.authenticator.enabled() {
+            auth_methods::USERNAME_PASSWORD
+        } else {
+            auth_methods::NO_AUTHENTICATION_REQUIRED
+        };
+
+        stream.write_all(&[SOCKS5_VER, auth_method]).await?;
+
+        // 2) Authentication
+        if self.authenticator.enabled() {
+            // +----+------+----------+------+----------+
+            // |VER | ULEN |  UNAME   | PLEN |  PASSWD  |
+            // +----+------+----------+------+----------+
+            // | 1  |  1   | 1 to 255 |  1   | 1 to 255 |
+            // +----+------+----------+------+----------+
             buf.resize(2, 0);
             stream.read_exact(buf.as_mut()).await?;
 
-            if buf[0] != SOCKS5_VER {
-                return Err(Self::reject_connection(
-                    io::ErrorKind::Unsupported,
-                    format!("client sent version=0x{:02x}", buf[0]),
-                    stream.peer_addr()?,
-                ));
-            }
-
-            let n_methods = buf[1] as usize;
-            if n_methods == 0 {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!(
-                        "Rejected SOCKS5 connection: n_methods is zero, remote_addr={:?}",
-                        stream.peer_addr()
-                    ),
-                ));
-            }
-
-            buf.resize(n_methods, 0);
+            let ulen = buf[1] as usize;
+            buf.resize(ulen, 0);
             stream.read_exact(buf.as_mut()).await?;
 
-            let client_methods = &buf[..];
-
-            // NO_ACCEPTABLE_METHODS
-            if (self.authenticator.enabled()
-                && !client_methods.contains(&auth_methods::USERNAME_PASSWORD))
-                || !client_methods.contains(&auth_methods::NO_AUTHENTICATION_REQUIRED)
-            {
+            let Ok(uname) = String::from_utf8(buf.to_vec()) else {
                 stream
-                    .write_all(&[SOCKS5_VER, auth_methods::NO_ACCEPTABLE_METHODS])
+                    .write_all(&[SOCKS5_AUTH_VER, response_code::FAILURE])
                     .await?;
                 stream.shutdown().await?;
-                // return Err(io::Error::other(
-                //     "Rejected SOCKS5 connection: NO_ACCEPTABLE_METHODS, remote_addr={:?}",
-                // ));
-                return Err(Self::reject_connection(
-                    io::ErrorKind::Other,
-                    "NO_ACCEPTABLE_METHODS",
-                    stream.peer_addr()?,
-                ));
-            }
-            // choose suitable auth method
-            let auth_method = if self.authenticator.enabled() {
-                auth_methods::USERNAME_PASSWORD
-            } else {
-                auth_methods::NO_AUTHENTICATION_REQUIRED
+                return Err(SocksError::InvalidUtf8 { field: "uname" });
             };
 
-            stream.write_all(&[SOCKS5_VER, auth_method]).await?;
-            // 2) Authentication
-            if self.authenticator.enabled() {
-                // +----+------+----------+------+----------+
-                // |VER | ULEN |  UNAME   | PLEN |  PASSWD  |
-                // +----+------+----------+------+----------+
-                // | 1  |  1   | 1 to 255 |  1   | 1 to 255 |
-                // +----+------+----------+------+----------+
-                buf.resize(2, 0);
-                stream.read_exact(buf.as_mut()).await?;
+            buf.resize(1, 0);
+            stream.read_exact(buf.as_mut()).await?;
 
-                let ulen = buf[1] as usize;
-                buf.resize(ulen, 0);
-                stream.read_exact(buf.as_mut()).await?;
+            let plen = buf[0] as usize;
+            buf.resize(plen, 0);
 
-                let Ok(uname) = String::from_utf8(buf.to_vec()) else {
+            stream.read_exact(buf.as_mut()).await?;
+
+            let Ok(pass) = String::from_utf8(buf.to_vec()) else {
+                stream
+                    .write_all(&[SOCKS5_AUTH_VER, response_code::FAILURE])
+                    .await?;
+                stream.shutdown().await?;
+                return Err(SocksError::InvalidUtf8 { field: "pass" });
+            };
+
+            // +----+--------+
+            // |VER | STATUS |
+            // +----+--------+
+            // | 1  |   1    |
+            // +----+--------+
+            // if matches!(self.authenticator.authenticate(&uname, &pass), true) {
+            //     stream
+            //         .write_all(&[SOCKS5_AUTH_VER, response_code::SUCCEEDED])
+            //         .await?;
+            // } else {
+            //     stream
+            //         .write_all(&[SOCKS5_AUTH_VER, response_code::FAILURE])
+            //         .await?;
+            //     stream.shutdown().await?;
+            //     return Err(SocksError::AuthFailed { username: uname });
+            // }
+
+            match self.authenticator.authenticate(&uname, &pass) {
+                true => {
+                    stream
+                        .write_all(&[SOCKS5_AUTH_VER, response_code::SUCCEEDED])
+                        .await?;
+                }
+                false => {
                     stream
                         .write_all(&[SOCKS5_AUTH_VER, response_code::FAILURE])
                         .await?;
                     stream.shutdown().await?;
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "Rejected SOCKS5 connection: username is not valid UTF-8",
-                    ));
-                };
-
-                buf.resize(1, 0);
-                stream.read_exact(buf.as_mut()).await?;
-
-                let plen = buf[0] as usize;
-                buf.resize(plen, 0);
-
-                stream.read_exact(buf.as_mut()).await?;
-
-                let Ok(pass) = String::from_utf8(buf.to_vec()) else {
-                    stream
-                        .write_all(&[SOCKS5_AUTH_VER, response_code::FAILURE])
-                        .await?;
-                    stream.shutdown().await?;
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "Rejected SOCKS5 connection: password is not valid UTF-8",
-                    ));
-                };
-
-                match self.authenticator.authenticate(&uname, &pass) {
-                    // +----+--------+
-                    // |VER | STATUS |
-                    // +----+--------+
-                    // | 1  |   1    |
-                    // +----+--------+
-                    true => {
-                        stream
-                            .write_all(&[SOCKS5_AUTH_VER, response_code::SUCCEEDED])
-                            .await?;
-                    }
-                    false => {
-                        stream
-                            .write_all(&[SOCKS5_AUTH_VER, response_code::FAILURE])
-                            .await?;
-                        stream.shutdown().await?;
-                        return Err(io::Error::other(format!(
-                            "Rejected SOCKS5 connection: auth failed, remote_addr={:?}",
-                            stream.peer_addr()
-                        )));
-                    }
+                    return Err(SocksError::AuthFailed { username: uname });
                 }
             }
         }
@@ -222,31 +230,34 @@ impl SocksInboundHandler {
         Ok(())
     }
 
-    async fn handle_command(&self, stream: &mut TcpStream) -> io::Result<()> {
+    async fn handle_command(&mut self, stream: &mut TcpStream) -> SocksResult<()> {
         // +----+-----+-------+------+----------+----------+
         // |VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |
         // +----+-----+-------+------+----------+----------+
         // | 1  |  1  |   1   |  1   | Variable |    2     |
         // +----+-----+-------+------+----------+----------+
 
-        let mut buf = BytesMut::new();
-
+        let buf = &mut self.buf;
+        buf.clear();
         buf.resize(4, 0);
         stream.read_exact(buf.as_mut()).await?;
 
-        let ver = buf[0];
-        let cmd = buf[1];
-        let atype = buf[3];
-        // let [ver, cmd, _, atype] = buf.as_ref() else {
-        //     return Err(io::Error::other("unsupported SOCKS version"));
-        // };
+        // let ver = buf[0];
+        // let cmd = buf[1];
+        // let atype = buf[3];
+
+        let [ver, cmd, _, atype] = *&buf[0..4] else {
+            return Err(SocksError::InvalidVersion {
+                expected: SOCKS5_VER,
+                got: 0u8,
+            });
+        };
 
         if ver != SOCKS5_VER {
-            return Err(Self::reject_connection(
-                io::ErrorKind::Unsupported,
-                format!("client sent version=0x{:02x}", buf[0]),
-                stream.peer_addr()?,
-            ));
+            return Err(SocksError::InvalidVersion {
+                expected: SOCKS5_VER,
+                got: ver,
+            });
         }
 
         let dst_addr = match atype {
@@ -259,7 +270,7 @@ impl SocksInboundHandler {
 
                 let ip = Ipv4Addr::from(ip_bytes);
                 let port = u16::from_be_bytes(port_bytes);
-                SocksAddr::Ip(SocketAddr::V4(SocketAddrV4::new(ip, port)))
+                SocksAddr::from((ip, port))
             }
             0x03 => {
                 buf.resize(1, 0);
@@ -267,17 +278,13 @@ impl SocksInboundHandler {
                 let domain_len = buf[0] as usize;
 
                 if domain_len < 1 || domain_len > 255 {
-                    Self::reply_command_by_atype(
+                    self.command_reply_by_atype(
                         stream,
                         response_code::ADDR_TYPE_NOT_SUPPORTED,
                         atype,
                     )
                     .await?;
-                    return Err(Self::reject_connection(
-                        io::ErrorKind::InvalidData,
-                        &format!("Invalid domain length: {}", domain_len),
-                        stream.peer_addr()?,
-                    ));
+                    return Err(SocksError::InvalidDomainLength { len: domain_len });
                 }
 
                 buf.resize(domain_len, 0);
@@ -290,11 +297,13 @@ impl SocksInboundHandler {
                     //     .write_all(&[SOCKS5_AUTH_HEAD, response_code::FAILURE])
                     //     .await?;
                     // stream.shutdown().await?;
-                    Self::reply_command_by_atype(stream, response_code::ADDR_TYPE_NOT_SUPPORTED, atype).await?;
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "Invalid domain (not valid UTF-8)",
-                    ));
+                    self.command_reply_by_atype(
+                        stream,
+                        response_code::ADDR_TYPE_NOT_SUPPORTED,
+                        atype,
+                    )
+                    .await?;
+                    return Err(SocksError::InvalidUtf8 { field: "domain" });
                 };
 
                 let mut port_bytes: [u8; 2] = [0u8; 2];
@@ -313,14 +322,10 @@ impl SocksInboundHandler {
 
                 let ip = Ipv6Addr::from(ip_bytes);
                 let port = u16::from_be_bytes(port_bytes);
-                SocksAddr::Ip(SocketAddr::V6(SocketAddrV6::new(ip, port, 0, 0)))
+                SocksAddr::from((ip, port))
             }
             _ => {
-                return Err(Self::reject_connection(
-                    io::ErrorKind::InvalidData,
-                    "invalid atype",
-                    stream.peer_addr()?,
-                ));
+                return Err(SocksError::AddrTypeNotSupported { atype });
             }
         };
 
@@ -333,18 +338,26 @@ impl SocksInboundHandler {
         // let dst = SocksAddr::read_from(&mut stream).await?;
         buf.clear();
 
+        log::debug!("handle {} {} {}", cmd, atype, dst_addr);
+
         match cmd {
             socks_command::CONNECT => {
                 // let target_addr: SocketAddr;
 
                 let target_addr = match dst_addr {
                     SocksAddr::Ip(addr) => addr,
-                    SocksAddr::Domain(domain, _) => {
+                    SocksAddr::Domain(domain, port) => {
                         // domain lookup
                         let mut addrs = tokio::net::lookup_host(domain).await?;
-                        addrs.next().ok_or_else(|| {
-                            io::Error::new(io::ErrorKind::Other, "No IP found for domain")
-                        })?
+                        let first_addr = addrs
+                            .next()
+                            .ok_or(IoError::new(IoErrorKind::Other, "No IP found for domain"))?;
+                        log::debug!(
+                            "lookup host result port: {} request port:{}",
+                            first_addr.port(),
+                            port
+                        );
+                        first_addr
                     }
                 };
 
@@ -352,32 +365,49 @@ impl SocksInboundHandler {
                 let result = TcpStream::connect(&target_addr).await;
 
                 let Ok(outbound) = result else {
-                    let rep = match result {
-                        Err(ref e) if e.kind() == io::ErrorKind::ConnectionRefused => response_code::CONNECTION_REFUSED,
-                        Err(ref e) if e.kind() == io::ErrorKind::TimedOut => response_code::TTL_EXPIRED,
-                        Err(ref e) if e.kind() == io::ErrorKind::HostUnreachable => response_code::HOST_UNREACHABLE,
-                        Err(ref e) if e.kind() == io::ErrorKind::NetworkUnreachable => response_code::NETWORK_UNREACHABLE,
+                    let rep = match &result {
+                        Err(e) if e.kind() == IoErrorKind::ConnectionRefused => {
+                            response_code::CONNECTION_REFUSED
+                        }
+                        Err(e) if e.kind() == IoErrorKind::TimedOut => response_code::TTL_EXPIRED,
+                        Err(e) if e.kind() == IoErrorKind::HostUnreachable => {
+                            response_code::HOST_UNREACHABLE
+                        }
+                        Err(e) if e.kind() == IoErrorKind::NetworkUnreachable => {
+                            response_code::NETWORK_UNREACHABLE
+                        }
                         _ => response_code::FAILURE,
                     };
 
-                    Self::reply_command_by_atype(stream, rep, atype).await?;
+                    // let rep = if let Err(e) = &result {
+                    //     match e.kind() {
+                    //         IoErrorKind::ConnectionRefused => response_code::CONNECTION_REFUSED,
+                    //         IoErrorKind::TimedOut => response_code::TTL_EXPIRED,
+                    //         IoErrorKind::HostUnreachable => response_code::HOST_UNREACHABLE,
+                    //         IoErrorKind::NetworkUnreachable => response_code::NETWORK_UNREACHABLE,
+                    //         _ => response_code::FAILURE,
+                    //     }
+                    // } else {
+                    //     response_code::FAILURE
+                    // };
 
-                    return Err(Self::reject_connection(
-                        io::ErrorKind::Other,
-                        format!("Failed to connect to target: {:?}", result.err()),
-                        stream.peer_addr()?,
-                    ));
+                    self.command_reply_by_atype(stream, rep, atype).await?;
+
+                    return match result {
+                        Err(e) => Err(SocksError::Io(e)),
+                        Ok(_) => unreachable!(),
+                    };
                 };
 
                 let bind_addr = outbound
                     .local_addr()
                     .unwrap_or_else(|_| "0.0.0.0:0".parse().unwrap());
 
-                Self::command_reply_by_bind_addr(stream, response_code::SUCCEEDED, &bind_addr)
+                self.command_reply_by_bind_addr(stream, response_code::SUCCEEDED, &bind_addr)
                     .await?;
 
                 log::info!(
-                    "SOCKS5 proxy established: {} -> {}",
+                    "SOCKS5 proxy established: {} -> {:?}",
                     stream.peer_addr()?,
                     target_addr
                 );
@@ -403,27 +433,205 @@ impl SocksInboundHandler {
                     }
                 }
             }
+            socks_command::UDP_ASSOCIATE => {
+                log::debug!("enter UDP_ASSOCIATE");
+                let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
+                socket.set_broadcast(true)?;
+                socket.set_nonblocking(true)?;
+                socket.bind(&socket2::SockAddr::from(SocketAddr::new(
+                    stream.local_addr()?.ip(),
+                    0,
+                )))?;
+
+                let udp_socket = UdpSocket::from_std(socket.into())?;
+                let udp_socket = Arc::new(udp_socket);
+
+                self.command_reply_by_bind_addr(
+                    stream,
+                    response_code::SUCCEEDED,
+                    &udp_socket.local_addr()?,
+                )
+                .await?;
+
+                let session = UdpAssociateSession {
+                    client_addr: stream.peer_addr()?,
+                    udp_socket: Arc::clone(&udp_socket),
+                };
+
+                self.handle_udp_traffic(session, stream).await?;
+            }
             _ => {
-                Self::reply_command_by_atype(stream, response_code::COMMAND_NOT_SUPPORTED, atype)
+                self.command_reply_by_atype(stream, response_code::COMMAND_NOT_SUPPORTED, atype)
                     .await?;
 
-                return Err(Self::reject_connection(
-                    io::ErrorKind::Other,
-                    &format!("Unsupported command: 0x{:02x}", cmd),
-                    stream.peer_addr()?,
-                ));
+                return Err(SocksError::CommandNotSupported { code: cmd });
             }
         }
 
         Ok(())
     }
 
+    async fn handle_udp_traffic(
+        &self,
+        session: UdpAssociateSession,
+        tcp_stream: &mut TcpStream,
+    ) -> SocksResult<()> {
+        let udp_socket = session.udp_socket;
+        let client_addr = session.client_addr;
+        let mut udp_buffer = vec![0u8; 65507];
+        let mut tcp_buffer = vec![0u8; 65507];
+
+        loop {
+            tokio::select! {
+                // from remote server
+                result = udp_socket.recv_from(&mut udp_buffer) => {
+                    match result {
+                        Ok((size, src_addr)) => {
+                            if let Ok((target_addr, data)) = Self::parse_udp_packet(&udp_buffer[..size]).await {
+                                // remote server -> client
+                                let packet = Self::build_udp_packet(&target_addr, &data)?;
+                                if let Err(e) = tcp_stream.write_all(&packet).await {
+                                    log::debug!("Failed to send UDP data to client: {}", e);
+                                    break;
+                                }
+                            } else {
+                                log::debug!("Invalid UDP packet from: {}", src_addr);
+                            }
+                        }
+                        Err(e) => {
+                            log::debug!("UDP recv error: {}", e);
+                            break;
+                        }
+                    }
+                }
+                // from client
+                result = tcp_stream.read(&mut tcp_buffer) => {
+                    match result {
+                        Ok(0) => {
+                            log::debug!("TCP connection closed by client");
+                            break;
+                        }
+                        Ok(size) => {
+                            if let Ok((target_addr, data)) = Self::parse_udp_packet(&tcp_buffer[..size]).await {
+                                // client -> remote server
+                                if let Err(e) = udp_socket.send_to(&data, &target_addr).await {
+                                    log::debug!("Failed to send UDP data to target: {}", e);
+                                }
+                            } else {
+                                log::debug!("Invalid UDP packet from client");
+                            }
+                        }
+                        Err(e) => {
+                            log::debug!("TCP read error: {}", e);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        log::info!("SOCKS5 UDP session ended for client: {}", client_addr);
+        Ok(())
+    }
+
+    async fn parse_udp_packet(packet: &[u8]) -> SocksResult<(SocketAddr, &[u8])> {
+        if packet.len() < 10 {
+            return Err(SocksError::UdpPacketTooShort);
+        }
+
+        // +----+------+------+----------+----------+----------+
+        // |RSV | FRAG | ATYP | DST.ADDR | DST.PORT |   DATA   |
+        // +----+------+------+----------+----------+----------+
+        // | 2  |  1   |  1   | Variable |    2     | Variable |
+        // +----+------+------+----------+----------+----------+
+
+        let atype = packet[3];
+        let addr_start = 4;
+        let (addr, addr_len) = match atype {
+            atype::IPV4 => {
+                if packet.len() < 10 {
+                    return Err(SocksError::UdpPacketTooShort);
+                }
+                let ip = Ipv4Addr::new(packet[4], packet[5], packet[6], packet[7]);
+                let port = u16::from_be_bytes([packet[8], packet[9]]);
+                (SocketAddr::from((ip, port)), 6)
+            }
+            atype::DOMAIN => {
+                let domain_len = packet[4] as usize;
+                if packet.len() < 7 + domain_len {
+                    return Err(SocksError::UdpPacketTooShort);
+                }
+                let domain_bytes = &packet[5..5 + domain_len];
+                let domain = String::from_utf8(domain_bytes.to_vec())
+                    .map_err(|_| SocksError::InvalidUtf8 { field: "domain" })?;
+                // let domain_addr = Self::lookup_host(domain).await?;
+                let port = u16::from_be_bytes([packet[5 + domain_len], packet[6 + domain_len]]);
+
+                // domain lookup
+                let mut addrs = tokio::net::lookup_host(domain).await?;
+                let first_addr = addrs
+                    .next()
+                    .ok_or(IoError::new(IoErrorKind::Other, "No IP found for domain"))?;
+
+                (
+                    SocketAddr::from((first_addr.ip(), port)),
+                    1 + domain_len + 2,
+                )
+            }
+            atype::IPV6 => {
+                if packet.len() < 22 {
+                    return Err(SocksError::UdpPacketTooShort);
+                }
+                let mut ip_bytes = [0u8; 16];
+                ip_bytes.copy_from_slice(&packet[4..20]);
+                let ip = Ipv6Addr::from(ip_bytes);
+                let port = u16::from_be_bytes([packet[20], packet[21]]);
+                (SocketAddr::from((ip, port)), 18)
+            }
+            _ => return Err(SocksError::AddrTypeNotSupported { atype }),
+        };
+
+        let data_start = addr_start + addr_len;
+        if data_start > packet.len() {
+            return Err(SocksError::UdpPacketInvalid);
+        }
+
+        Ok((addr, &packet[data_start..]))
+    }
+
+    fn build_udp_packet(target_addr: &SocketAddr, data: &[u8]) -> SocksResult<Vec<u8>> {
+        let mut packet = Vec::with_capacity(256);
+
+        // RSV
+        packet.extend_from_slice(&[0x00, 0x00]);
+        // FRAG
+        packet.push(0x00);
+
+        match target_addr {
+            SocketAddr::V4(addr) => {
+                packet.push(atype::IPV4);
+                packet.extend_from_slice(&addr.ip().octets());
+                packet.extend_from_slice(&addr.port().to_be_bytes());
+            }
+            SocketAddr::V6(addr) => {
+                packet.push(atype::IPV6);
+                packet.extend_from_slice(&addr.ip().octets());
+                packet.extend_from_slice(&addr.port().to_be_bytes());
+            }
+        }
+
+        packet.extend_from_slice(data);
+        Ok(packet)
+    }
+
     async fn command_reply_by_bind_addr(
+        &mut self, 
         stream: &mut TcpStream,
         resp: u8,
         bind_addr: &SocketAddr,
-    ) -> io::Result<()> {
-        let mut buf = BytesMut::new();
+    ) -> IoResult<()> {
+        let buf = &mut self.buf;
+        buf.clear();
         buf.put_u8(SOCKS5_VER);
         buf.put_u8(resp);
         buf.put_u8(0x0);
@@ -449,14 +657,14 @@ impl SocksInboundHandler {
         stream.write_all(&buf).await
     }
 
-    async fn reply_command_by_atype(stream: &mut TcpStream, resp: u8, atype: u8) -> io::Result<()> {
-        let mut buf = BytesMut::new();
-
+    async fn command_reply_by_atype(&mut self, stream: &mut TcpStream, resp: u8, atype: u8) -> IoResult<()> {
+        let buf = &mut self.buf ;
+        buf.clear();
         buf.put_u8(SOCKS5_VER);
         buf.put_u8(resp);
         buf.put_u8(0x0);
         buf.put_u8(atype);
-
+        log::debug!("command_reply_by_atype {} {}", resp, atype);
         match atype {
             0x01 => {
                 // IPv4: 4 bytes IP + 2 bytes PORT
@@ -480,11 +688,12 @@ impl SocksInboundHandler {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl InboundHandler for SocksInboundHandler {
-    async fn handle_connection(&self, mut stream: TcpStream) -> io::Result<()> {
+    async fn handle_connection(&mut self, mut stream: TcpStream) -> anyhow::Result<()> {
         self.handle_handshake(&mut stream).await?;
-        self.handle_command(&mut stream).await
+        self.handle_command(&mut stream).await?;
+        Ok(())
     }
 }
 

@@ -1,8 +1,8 @@
 pub(super) mod socks;
 use socket2::{Domain, Protocol, Socket, Type};
 use std::sync::Arc;
-use std::{io, net::SocketAddr};
-use tokio::net::TcpListener;
+use std::{net::SocketAddr};
+use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -17,7 +17,7 @@ pub struct InboundManager {
 
 #[async_trait]
 pub trait InboundHandler: Send + Sync {
-    async fn handle_connection(&self, stream: tokio::net::TcpStream) -> io::Result<()>;
+    async fn handle_connection(&mut self, stream: TcpStream) -> anyhow::Result<()>;
 }
 
 pub trait InboundHandlerFactory {
@@ -87,11 +87,11 @@ pub async fn listen_inbound(
                 let (stream, remote_addr) = accept_result?;
                 log::debug!( "Accepted connection from {} to {}://{}", remote_addr, inbound_config.protocol, stream.local_addr()?);
 
-                let handler = factory.create_handler(&inbound_config)?;
+                let mut handler = factory.create_handler(&inbound_config)?;
                 // async handler muti connections
                 tokio::spawn(async move {
                     if let Err(e) = handler.handle_connection(stream).await {
-                        log::error!("handle connection error: {:?}", e);
+                        log::error!("handle connection error: {:?} remote: {}", e, remote_addr);
                     }
                 });
             }
@@ -133,10 +133,10 @@ impl InboundHandlerFactory for SimpleInboundHandlerFactory {
                 let authenticator = Arc::new(SimpleAuthenticator::new(
                     "admin".into(),
                     "123456".into(),
-                    true, 
+                    true,
                 ));
                 Ok(Box::new(SocksInboundHandler::new(authenticator)))
-            },
+            }
             "http" => Ok(Box::new(SimpleHttpHandler {})),
             "shadowsocks" => Ok(Box::new(SimpleShadowsocksHandler {})),
             "vmess" => Ok(Box::new(SimpleVmssHandler {})),
@@ -152,25 +152,25 @@ struct SimpleHttpHandler;
 struct SimpleShadowsocksHandler;
 struct SimpleVmssHandler;
 
-#[async_trait::async_trait]
+#[async_trait]
 impl InboundHandler for SimpleHttpHandler {
-    async fn handle_connection(&self, _stream: tokio::net::TcpStream) -> io::Result<()> {
+    async fn handle_connection(&mut self, _stream: TcpStream) -> anyhow::Result<()> {
         log::info!("Handling HTTP connection (stub)");
         Ok(())
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl InboundHandler for SimpleShadowsocksHandler {
-    async fn handle_connection(&self, _stream: tokio::net::TcpStream) -> io::Result<()> {
+    async fn handle_connection(&mut self, _stream: TcpStream) -> anyhow::Result<()> {
         log::info!("Handling Shadowsocks connection (stub)");
         Ok(())
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl InboundHandler for SimpleVmssHandler {
-    async fn handle_connection(&self, _stream: tokio::net::TcpStream) -> io::Result<()> {
+    async fn handle_connection(&mut self, _stream: TcpStream) -> anyhow::Result<()> {
         log::info!("Handling VMess connection (stub)");
         Ok(())
     }
