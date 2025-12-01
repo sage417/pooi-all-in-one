@@ -491,16 +491,16 @@ impl SocksInboundHandler {
         // session: UdpAssociateSession,
         tcp_stream: &mut TcpStream,
         udp_socket: UdpSocket,
-        client_addr: SocketAddr,
+        client_tcp_addr: SocketAddr,
     ) -> SocksResult<()> {
         // let udp_socket = session.udp_socket;
         // let client_addr = session.client_addr;
-        let mut udp_buffer = [0u8; 65535];
+        let mut udp_buffer = vec![0u8; 65535];
         let mut tcp_buffer = [0u8; 1];
 
         log::info!(
             "SOCKS5 UDP association from {} at {}",
-            client_addr,
+            client_tcp_addr,
             udp_socket.local_addr()?
         );
 
@@ -518,19 +518,19 @@ impl SocksInboundHandler {
                         }
                     };
                     let data = &udp_buffer[..n];
-
-                    if peer_addr.ip() == client_addr.ip() {
+                    // from client ip and start with 0x00 0x00
+                    if client_tcp_addr.ip() == peer_addr.ip() && data.len() > 2 && data[0] == 0x00 && data[1] == 0x00 {
                         let (target_addr, data) = match Self::parse_udp_packet(data).await {
                             Ok(r) => r,
                             Err(e) => {
-                                log::debug!("Failed to parse UDP packet from {}: {}", client_addr, e);
+                                log::debug!("Failed to parse UDP packet from {}: {}", client_tcp_addr, e);
                                 continue;
                             }
                         };
 
                         log::debug!(
                             "UDP request from client {} to target {}, {} bytes",
-                            client_addr,
+                            client_tcp_addr,
                             target_addr,
                             data.len()
                         );
@@ -548,8 +548,8 @@ impl SocksInboundHandler {
 
                         {
                             let mut mapping = client_mapping.write().await;
-                            mapping.insert(socket_addr, client_addr);
-                            log::trace!("Mapped target {} -> client {}", socket_addr, client_addr);
+                            mapping.insert(socket_addr, peer_addr);
+                            log::trace!("Mapped target {} -> client {}", socket_addr, peer_addr);
                         }
 
                         if let Err(e) = udp_socket.send_to(data, socket_addr).await {
@@ -596,7 +596,7 @@ impl SocksInboundHandler {
             }
         }
 
-        log::info!("SOCKS5 UDP relay session ended for client: {}", client_addr);
+        log::info!("SOCKS5 UDP relay session ended for client: {}", client_tcp_addr);
         Ok(())
     }
 
@@ -611,8 +611,14 @@ impl SocksInboundHandler {
         // | 2  |  1   |  1   | Variable |    2     | Variable |
         // +----+------+------+----------+----------+----------+
 
+        if packet[0] != 0x00 || packet[1] != 0x00 {
+            log::debug!("Invalid RSV in UDP packet: {} {}", packet[0], packet[1]);
+            return Err(SocksError::UdpPacketInvalid);
+        }
+
         let frag = packet[2];
         if frag != 0x00 {
+            log::debug!("Unsupported UDP frag: {}", frag);
             return Err(SocksError::UdpPacketInvalid);
         }
 

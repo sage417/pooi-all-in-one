@@ -81,7 +81,7 @@ pub fn start_service() -> Result<(), Error> {
         loop {
             inbound_manager = InboundManager::new(
                 vec![crate::config::Inbound {
-                    address: String::from("192.168.158.151"),
+                    address: String::from("0.0.0.0"),
                     port: 8888,
                     protocol: String::from("socks"),
                     tag: String::from(""),
