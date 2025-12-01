@@ -495,7 +495,7 @@ impl SocksInboundHandler {
     ) -> SocksResult<()> {
         // let udp_socket = session.udp_socket;
         // let client_addr = session.client_addr;
-        let mut udp_buffer = [0u8; 655335];
+        let mut udp_buffer = [0u8; 65535];
         let mut tcp_buffer = [0u8; 1];
 
         log::info!(
@@ -528,6 +528,13 @@ impl SocksInboundHandler {
                             }
                         };
 
+                        log::debug!(
+                            "UDP request from client {} to target {}, {} bytes",
+                            client_addr,
+                            target_addr,
+                            data.len()
+                        );
+
                         let socket_addr = match target_addr {
                             SocksAddr::SocketAddr(addr) => addr,
                             SocksAddr::DomainNameAddr(domain, port) => {
@@ -550,16 +557,22 @@ impl SocksInboundHandler {
                         }
 
                     } else {
-                            let client_addr = {
-                                let mapping = client_mapping.read().await;
-                                mapping.get(&peer_addr).cloned()
-                            };
+                        let client_addr = {
+                            let mapping = client_mapping.read().await;
+                            mapping.get(&peer_addr).cloned()
+                        };
 
-                            let Some(client_udp_addr) = client_addr else {
-                                log::debug!("No client mapping found for server {}, ignoring packet", peer_addr);
-                                continue;
-                            };
+                        let Some(client_udp_addr) = client_addr else {
+                            log::debug!("No client mapping found for server {}, ignoring packet", peer_addr);
+                            continue;
+                        };
 
+                        log::debug!(
+                            "UDP response from server {} to client {}, {} bytes",
+                            peer_addr,
+                            client_udp_addr,
+                            data.len()
+                        );
 
                         let packet = Self::build_udp_packet(&peer_addr, data)?;
                         udp_socket.send_to(&packet, client_udp_addr).await?;
