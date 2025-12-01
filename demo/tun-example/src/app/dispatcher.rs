@@ -19,12 +19,11 @@ pub struct Dispatcher {
 }
 
 impl Dispatcher {
-    
     pub async fn dispatch_datagram(
         &self,
         mut sess: Session,
     ) -> io::Result<Box<dyn OutboundDatagram>> {
         let _ = sess;
-        io::Result::Ok(Box::new(MockOutboundDatagram{}))
+        io::Result::Ok(Box::new(MockOutboundDatagram {}))
     }
 }

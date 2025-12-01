@@ -1,7 +1,7 @@
 pub(super) mod socks;
 use socket2::{Domain, Protocol, Socket, Type};
+use std::net::SocketAddr;
 use std::sync::Arc;
-use std::{net::SocketAddr};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;

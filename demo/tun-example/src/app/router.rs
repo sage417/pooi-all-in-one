@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::app::{dns::SyncDnsClient};
+use crate::app::dns::SyncDnsClient;
 use crate::session::Session;
 
 pub type SyncRouter = Arc<RwLock<Router>>;
@@ -23,5 +23,3 @@ struct Rule {
     target: String,
     condition: Box<dyn Condition>,
 }
-
-

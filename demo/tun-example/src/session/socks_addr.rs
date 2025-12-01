@@ -96,7 +96,9 @@ impl Clone for SocksAddr {
     fn clone(&self) -> Self {
         match self {
             SocksAddr::SocketAddr(addr) => SocksAddr::SocketAddr(addr.clone()),
-            SocksAddr::DomainNameAddr(domain, port) => SocksAddr::DomainNameAddr(domain.clone(), *port),
+            SocksAddr::DomainNameAddr(domain, port) => {
+                SocksAddr::DomainNameAddr(domain.clone(), *port)
+            }
         }
     }
 }

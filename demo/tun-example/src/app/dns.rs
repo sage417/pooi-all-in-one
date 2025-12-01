@@ -1,11 +1,6 @@
 use anyhow::{Result, anyhow};
 use lru::LruCache;
 
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-use std::sync::{Arc, Weak};
-use std::time::{Duration, Instant};
-use std::{collections::HashMap, num::NonZeroUsize};
-use tokio::sync::{Mutex, RwLock};
 #[allow(unused_imports)]
 use hickory_proto::{
     op::{
@@ -13,12 +8,14 @@ use hickory_proto::{
     },
     rr::{Name, record_data::RData, record_type::RecordType},
 };
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::sync::{Arc, Weak};
+use std::time::{Duration, Instant};
+use std::{collections::HashMap, num::NonZeroUsize};
+use tokio::sync::{Mutex, RwLock};
 
 use super::dispatcher::Dispatcher;
-use crate::{
-    proxy::{datagram::*},
-    session::*,
-};
+use crate::{proxy::datagram::*, session::*};
 
 pub type SyncDnsClient = Arc<RwLock<DnsClient>>;
 type DNSCache = Arc<Mutex<LruCache<String, CacheEntry>>>;
@@ -100,7 +97,6 @@ impl DnsRecord {
 }
 
 impl DnsClient {
-
     #[allow(dead_code)]
     pub fn new(dns_config: &crate::config::Dns) -> Result<Self> {
         if dns_config.upstreams.is_empty() {

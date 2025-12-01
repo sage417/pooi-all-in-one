@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use bytes::{BufMut, BytesMut};
 use socket2::{Domain, Protocol, Socket, Type};
 use std::{
+    collections::HashMap,
     io::{Error as IoError, ErrorKind as IoErrorKind, Result as IoResult},
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
     sync::Arc,
@@ -10,6 +11,7 @@ use thiserror::Error;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpStream, UdpSocket},
+    sync::RwLock,
 };
 
 use super::InboundHandler;
@@ -161,80 +163,83 @@ impl SocksInboundHandler {
         Ok(())
     }
 
-    async fn user_password_negotiation(&mut self, stream: &mut TcpStream) -> Result<(), SocksError> {
-            let buf = &mut self.buf;
+    async fn user_password_negotiation(
+        &mut self,
+        stream: &mut TcpStream,
+    ) -> Result<(), SocksError> {
+        let buf = &mut self.buf;
 
-            // +----+------+----------+------+----------+
-            // |VER | ULEN |  UNAME   | PLEN |  PASSWD  |
-            // +----+------+----------+------+----------+
-            // | 1  |  1   | 1 to 255 |  1   | 1 to 255 |
-            // +----+------+----------+------+----------+
-            buf.resize(2, 0);
-            stream.read_exact(buf.as_mut()).await?;
+        // +----+------+----------+------+----------+
+        // |VER | ULEN |  UNAME   | PLEN |  PASSWD  |
+        // +----+------+----------+------+----------+
+        // | 1  |  1   | 1 to 255 |  1   | 1 to 255 |
+        // +----+------+----------+------+----------+
+        buf.resize(2, 0);
+        stream.read_exact(buf.as_mut()).await?;
 
-            let ulen = buf[1] as usize;
-            buf.resize(ulen, 0);
-            stream.read_exact(buf.as_mut()).await?;
+        let ulen = buf[1] as usize;
+        buf.resize(ulen, 0);
+        stream.read_exact(buf.as_mut()).await?;
 
-            let Ok(uname) = String::from_utf8(buf.to_vec()) else {
-                stream
-                    .write_all(&[SOCKS5_AUTH_VER, response_code::FAILURE])
-                    .await?;
-                stream.shutdown().await?;
-                return Err(SocksError::InvalidUtf8 { field: "uname" });
-            };
+        let Ok(uname) = String::from_utf8(buf.to_vec()) else {
+            stream
+                .write_all(&[SOCKS5_AUTH_VER, response_code::FAILURE])
+                .await?;
+            stream.shutdown().await?;
+            return Err(SocksError::InvalidUtf8 { field: "uname" });
+        };
 
-            buf.resize(1, 0);
-            stream.read_exact(buf.as_mut()).await?;
+        buf.resize(1, 0);
+        stream.read_exact(buf.as_mut()).await?;
 
-            let plen = buf[0] as usize;
-            buf.resize(plen, 0);
+        let plen = buf[0] as usize;
+        buf.resize(plen, 0);
 
-            stream.read_exact(buf.as_mut()).await?;
+        stream.read_exact(buf.as_mut()).await?;
 
-            let Ok(pass) = String::from_utf8(buf.to_vec()) else {
-                stream
-                    .write_all(&[SOCKS5_AUTH_VER, response_code::FAILURE])
-                    .await?;
-                stream.shutdown().await?;
-                return Err(SocksError::InvalidUtf8 { field: "pass" });
-            };
+        let Ok(pass) = String::from_utf8(buf.to_vec()) else {
+            stream
+                .write_all(&[SOCKS5_AUTH_VER, response_code::FAILURE])
+                .await?;
+            stream.shutdown().await?;
+            return Err(SocksError::InvalidUtf8 { field: "pass" });
+        };
 
-            // +----+--------+
-            // |VER | STATUS |
-            // +----+--------+
-            // | 1  |   1    |
-            // +----+--------+
-            if matches!(self.authenticator.authenticate(&uname, &pass), true) {
-                stream
-                    .write_all(&[SOCKS5_AUTH_VER, response_code::SUCCEEDED])
-                    .await?;
-                Ok(())
-            } else {
-                stream
-                    .write_all(&[SOCKS5_AUTH_VER, response_code::FAILURE])
-                    .await?;
-                stream.shutdown().await?;
-                Err(SocksError::AuthFailed { username: uname })
-            }
+        // +----+--------+
+        // |VER | STATUS |
+        // +----+--------+
+        // | 1  |   1    |
+        // +----+--------+
+        if matches!(self.authenticator.authenticate(&uname, &pass), true) {
+            stream
+                .write_all(&[SOCKS5_AUTH_VER, response_code::SUCCEEDED])
+                .await?;
+            Ok(())
+        } else {
+            stream
+                .write_all(&[SOCKS5_AUTH_VER, response_code::FAILURE])
+                .await?;
+            stream.shutdown().await?;
+            Err(SocksError::AuthFailed { username: uname })
+        }
 
-            // match self.authenticator.authenticate(&uname, &pass) {
-            //     true => {
-            //         stream
-            //             .write_all(&[SOCKS5_AUTH_VER, response_code::SUCCEEDED])
-            //             .await?;
-            //         Ok(())
-            //     }
-            //     false => {
-            //         stream
-            //             .write_all(&[SOCKS5_AUTH_VER, response_code::FAILURE])
-            //             .await?;
-            //         stream.shutdown().await?;
-            //         Err(SocksError::AuthFailed { username: uname })
-            //     }
-            // }
+        // match self.authenticator.authenticate(&uname, &pass) {
+        //     true => {
+        //         stream
+        //             .write_all(&[SOCKS5_AUTH_VER, response_code::SUCCEEDED])
+        //             .await?;
+        //         Ok(())
+        //     }
+        //     false => {
+        //         stream
+        //             .write_all(&[SOCKS5_AUTH_VER, response_code::FAILURE])
+        //             .await?;
+        //         stream.shutdown().await?;
+        //         Err(SocksError::AuthFailed { username: uname })
+        //     }
+        // }
     }
-    
+
     async fn handle_command(&mut self, stream: &mut TcpStream) -> SocksResult<()> {
         // +----+-----+-------+------+----------+----------+
         // |VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |
@@ -343,7 +348,14 @@ impl SocksInboundHandler {
         // let dst = SocksAddr::read_from(&mut stream).await?;
         buf.clear();
 
-        log::debug!("handle cmd: {} atype: {} {}, local_addr: {:?} client_addr: {:?}", cmd, atype, dst_addr, stream.local_addr(), stream.peer_addr());
+        log::debug!(
+            "handle cmd: {} atype: {} {}, local_addr: {:?} client_addr: {:?}",
+            cmd,
+            atype,
+            dst_addr,
+            stream.local_addr(),
+            stream.peer_addr()
+        );
 
         match cmd {
             socks_command::CONNECT => {
@@ -441,7 +453,6 @@ impl SocksInboundHandler {
                 }
             }
             socks_command::UDP_ASSOCIATE => {
-                
                 let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
                 socket.set_broadcast(true)?;
                 socket.set_nonblocking(true)?;
@@ -461,7 +472,8 @@ impl SocksInboundHandler {
                 )
                 .await?;
 
-                self.handle_udp_traffic(stream, udp_socket, stream.peer_addr()?).await?;
+                self.handle_udp_traffic(stream, udp_socket, stream.peer_addr()?)
+                    .await?;
             }
             _ => {
                 self.command_reply_by_atype(stream, response_code::COMMAND_NOT_SUPPORTED, atype)
@@ -483,7 +495,7 @@ impl SocksInboundHandler {
     ) -> SocksResult<()> {
         // let udp_socket = session.udp_socket;
         // let client_addr = session.client_addr;
-        let mut udp_buffer = vec![0u8; 65507];
+        let mut udp_buffer = [0u8; 655335];
         let mut tcp_buffer = [0u8; 1];
 
         log::info!(
@@ -492,41 +504,69 @@ impl SocksInboundHandler {
             udp_socket.local_addr()?
         );
 
+        let client_mapping = Arc::new(RwLock::new(HashMap::new()));
+
         loop {
             tokio::select! {
-                // from remote server
-                result = udp_socket.recv_from(&mut udp_buffer) => {
-                    match result {
-                        Ok((size, src_addr)) => {
-                            if src_addr == client_addr {
-                                if let Ok((target_addr, data)) = Self::parse_udp_packet(&udp_buffer[..size]).await {
-                                    let socket_addr = match target_addr {
-                                        SocksAddr::SocketAddr(addr) => addr,
-                                        SocksAddr::DomainNameAddr(domain, port) => {
-                                            // hostname lookup
-                                            let mut addrs = tokio::net::lookup_host((domain, port)).await?;
-                                            addrs.next().ok_or_else(||
-                                                IoError::new(IoErrorKind::Other, "No IP found for domain")
-                                            )?
-                                        }
-                                    };
-                                    if let Err(e) = udp_socket.send_to(data, socket_addr).await {
-                                        log::debug!("Failed to send UDP data to {}: {}", socket_addr, e);
-                                    }
-                                }
-                            } else {
-                                let packet = Self::build_udp_packet(&src_addr, &udp_buffer[..size])?;
-                                udp_socket.send_to(&packet, client_addr).await?;
-                            }
-                        }
+                recv_result = udp_socket.recv_from(&mut udp_buffer) => {
+                    let (n, peer_addr) = match recv_result {
+                        Ok(r) => r,
                         Err(e) => {
-                            log::debug!("UDP recv error: {}", e);
-                            break;
+                            log::debug!("udp server recv_from failed with error: {}", e);
+                            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                            continue;
                         }
-                    }
-                }
+                    };
+                    let data = &udp_buffer[..n];
 
-                // from client
+                    if peer_addr.ip() == client_addr.ip() {
+                        let (target_addr, data) = match Self::parse_udp_packet(data).await {
+                            Ok(r) => r,
+                            Err(e) => {
+                                log::debug!("Failed to parse UDP packet from {}: {}", client_addr, e);
+                                continue;
+                            }
+                        };
+
+                        let socket_addr = match target_addr {
+                            SocksAddr::SocketAddr(addr) => addr,
+                            SocksAddr::DomainNameAddr(domain, port) => {
+                                // hostname lookup
+                                let mut addrs = tokio::net::lookup_host((domain, port)).await?;
+                                addrs.next().ok_or_else(||
+                                    IoError::new(IoErrorKind::Other, "No IP found for domain")
+                                )?
+                            }
+                        };
+
+                        {
+                            let mut mapping = client_mapping.write().await;
+                            mapping.insert(socket_addr, client_addr);
+                            log::trace!("Mapped target {} -> client {}", socket_addr, client_addr);
+                        }
+
+                        if let Err(e) = udp_socket.send_to(data, socket_addr).await {
+                            log::debug!("Failed to send UDP data to {}: {}", socket_addr, e);
+                        }
+
+                    } else {
+                            let client_addr = {
+                                let mapping = client_mapping.read().await;
+                                mapping.get(&peer_addr).cloned()
+                            };
+
+                            let Some(client_udp_addr) = client_addr else {
+                                log::debug!("No client mapping found for server {}, ignoring packet", peer_addr);
+                                continue;
+                            };
+
+
+                        let packet = Self::build_udp_packet(&peer_addr, data)?;
+                        udp_socket.send_to(&packet, client_udp_addr).await?;
+                    }
+
+
+                }
                 result = tcp_stream.read(&mut tcp_buffer) => {
                     match result {
                         Ok(0) => {
@@ -560,19 +600,19 @@ impl SocksInboundHandler {
 
         let frag = packet[2];
         if frag != 0x00 {
-            return Err(SocksError::UdpPacketInvalid); 
+            return Err(SocksError::UdpPacketInvalid);
         }
 
         let atype = packet[3];
-        let addr_start = 4;
-        let (addr, addr_len) = match atype {
+        // let addr_start = 4;
+        let (addr, offset) = match atype {
             atype::IPV4 => {
                 if packet.len() < 10 {
                     return Err(SocksError::UdpPacketTooShort);
                 }
                 let ip = Ipv4Addr::new(packet[4], packet[5], packet[6], packet[7]);
                 let port = u16::from_be_bytes([packet[8], packet[9]]);
-                (SocksAddr::from((ip, port)), 6)
+                (SocksAddr::from((ip, port)), 10)
             }
             atype::DOMAIN => {
                 let domain_len = packet[4] as usize;
@@ -594,7 +634,7 @@ impl SocksInboundHandler {
                 (
                     SocksAddr::DomainNameAddr(domain, port),
                     // SocketAddr::from((addr.ip(), port)),
-                    1 + domain_len + 2,
+                    7 + domain_len,
                 )
             }
             atype::IPV6 => {
@@ -605,17 +645,17 @@ impl SocksInboundHandler {
                 ip_bytes.copy_from_slice(&packet[4..20]);
                 let ip = Ipv6Addr::from(ip_bytes);
                 let port = u16::from_be_bytes([packet[20], packet[21]]);
-                (SocksAddr::from((ip, port)), 18)
+                (SocksAddr::from((ip, port)), 22)
             }
             _ => return Err(SocksError::AddrTypeNotSupported { atype }),
         };
 
-        let data_start = addr_start + addr_len;
-        if data_start > packet.len() {
+        // let data_start = addr_start + offset;
+        if offset > packet.len() {
             return Err(SocksError::UdpPacketInvalid);
         }
 
-        Ok((SocksAddr::from(addr), &packet[data_start..]))
+        Ok((SocksAddr::from(addr), &packet[offset..]))
     }
 
     fn build_udp_packet(target_addr: &SocketAddr, data: &[u8]) -> SocksResult<Vec<u8>> {

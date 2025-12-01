@@ -1,5 +1,5 @@
-pub(super) mod inbound;
 pub(super) mod datagram;
+pub(super) mod inbound;
 
 use async_trait::async_trait;
 use std::{fmt, io::Result as IoResult, net::SocketAddr};
@@ -173,9 +173,7 @@ impl fmt::Display for DatagramSource {
     }
 }
 
-pub struct MockOutboundDatagram {
-
-}
+pub struct MockOutboundDatagram {}
 
 impl OutboundDatagram for MockOutboundDatagram {
     fn split(
