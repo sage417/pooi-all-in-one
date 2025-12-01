@@ -84,12 +84,6 @@ pub(super) struct SocksInboundHandler {
     buf: BytesMut,
 }
 
-#[derive(Debug, Clone)]
-struct UdpAssociateSession {
-    client_addr: SocketAddr,
-    udp_socket: Arc<UdpSocket>,
-}
-
 pub trait Authenticator: Send + Sync {
     fn enabled(&self) -> bool;
     fn authenticate(&self, username: &str, password: &str) -> bool;
@@ -160,7 +154,16 @@ impl SocksInboundHandler {
         stream.write_all(&[SOCKS5_VER, auth_method]).await?;
 
         // 2) Authentication
-        if self.authenticator.enabled() {
+        if auth_method == auth_methods::USERNAME_PASSWORD {
+            self.user_password_negotiation(stream).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn user_password_negotiation(&mut self, stream: &mut TcpStream) -> Result<(), SocksError> {
+            let buf = &mut self.buf;
+
             // +----+------+----------+------+----------+
             // |VER | ULEN |  UNAME   | PLEN |  PASSWD  |
             // +----+------+----------+------+----------+
@@ -202,37 +205,36 @@ impl SocksInboundHandler {
             // +----+--------+
             // | 1  |   1    |
             // +----+--------+
-            // if matches!(self.authenticator.authenticate(&uname, &pass), true) {
-            //     stream
-            //         .write_all(&[SOCKS5_AUTH_VER, response_code::SUCCEEDED])
-            //         .await?;
-            // } else {
-            //     stream
-            //         .write_all(&[SOCKS5_AUTH_VER, response_code::FAILURE])
-            //         .await?;
-            //     stream.shutdown().await?;
-            //     return Err(SocksError::AuthFailed { username: uname });
-            // }
-
-            match self.authenticator.authenticate(&uname, &pass) {
-                true => {
-                    stream
-                        .write_all(&[SOCKS5_AUTH_VER, response_code::SUCCEEDED])
-                        .await?;
-                }
-                false => {
-                    stream
-                        .write_all(&[SOCKS5_AUTH_VER, response_code::FAILURE])
-                        .await?;
-                    stream.shutdown().await?;
-                    return Err(SocksError::AuthFailed { username: uname });
-                }
+            if matches!(self.authenticator.authenticate(&uname, &pass), true) {
+                stream
+                    .write_all(&[SOCKS5_AUTH_VER, response_code::SUCCEEDED])
+                    .await?;
+                Ok(())
+            } else {
+                stream
+                    .write_all(&[SOCKS5_AUTH_VER, response_code::FAILURE])
+                    .await?;
+                stream.shutdown().await?;
+                Err(SocksError::AuthFailed { username: uname })
             }
-        }
 
-        Ok(())
+            // match self.authenticator.authenticate(&uname, &pass) {
+            //     true => {
+            //         stream
+            //             .write_all(&[SOCKS5_AUTH_VER, response_code::SUCCEEDED])
+            //             .await?;
+            //         Ok(())
+            //     }
+            //     false => {
+            //         stream
+            //             .write_all(&[SOCKS5_AUTH_VER, response_code::FAILURE])
+            //             .await?;
+            //         stream.shutdown().await?;
+            //         Err(SocksError::AuthFailed { username: uname })
+            //     }
+            // }
     }
-
+    
     async fn handle_command(&mut self, stream: &mut TcpStream) -> SocksResult<()> {
         // +----+-----+-------+------+----------+----------+
         // |VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |
@@ -314,7 +316,7 @@ impl SocksInboundHandler {
 
                 let port = u16::from_be_bytes(port_bytes);
 
-                SocksAddr::Domain(domain, port)
+                SocksAddr::DomainNameAddr(domain, port)
             }
             0x04 => {
                 let mut ip_bytes: [u8; 16] = [0u8; 16];
@@ -341,15 +343,15 @@ impl SocksInboundHandler {
         // let dst = SocksAddr::read_from(&mut stream).await?;
         buf.clear();
 
-        log::debug!("handle {} {} {}", cmd, atype, dst_addr);
+        log::debug!("handle cmd: {} atype: {} {}, local_addr: {:?} client_addr: {:?}", cmd, atype, dst_addr, stream.local_addr(), stream.peer_addr());
 
         match cmd {
             socks_command::CONNECT => {
                 // let target_addr: SocketAddr;
 
                 let target_addr = match dst_addr {
-                    SocksAddr::Ip(addr) => addr,
-                    SocksAddr::Domain(domain, port) => {
+                    SocksAddr::SocketAddr(addr) => addr,
+                    SocksAddr::DomainNameAddr(domain, port) => {
                         // domain lookup
                         let mut addrs = tokio::net::lookup_host(domain).await?;
                         let first_addr = addrs
@@ -406,7 +408,9 @@ impl SocksInboundHandler {
                     .local_addr()
                     .unwrap_or_else(|_| "0.0.0.0:0".parse().unwrap());
 
-                self.command_reply_by_bind_addr(stream, response_code::SUCCEEDED, &bind_addr)
+                log::debug!("bind_addr {:?}", bind_addr);
+
+                self.command_reply_by_bind_addr(stream, response_code::SUCCEEDED, bind_addr)
                     .await?;
 
                 log::info!(
@@ -426,18 +430,18 @@ impl SocksInboundHandler {
                 tokio::select! {
                     res = client_to_target => {
                         if let Err(e) = res {
-                            log::debug!("Client->Target error: {}", e);
+                            log::debug!("Client -> Target error: {}", e);
                         }
                     }
                     res = target_to_client => {
                         if let Err(e) = res {
-                            log::debug!("Target->Client error: {}", e);
+                            log::debug!("Target -> Client error: {}", e);
                         }
                     }
                 }
             }
             socks_command::UDP_ASSOCIATE => {
-                log::debug!("enter UDP_ASSOCIATE");
+                
                 let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
                 socket.set_broadcast(true)?;
                 socket.set_nonblocking(true)?;
@@ -445,23 +449,19 @@ impl SocksInboundHandler {
                     stream.local_addr()?.ip(),
                     0,
                 )))?;
+                log::debug!("UDP ASSOCIATE socket bound to {:?}", socket.local_addr()?);
 
                 let udp_socket = UdpSocket::from_std(socket.into())?;
-                let udp_socket = Arc::new(udp_socket);
+                // let udp_socket = Arc::new(udp_socket);
 
                 self.command_reply_by_bind_addr(
                     stream,
                     response_code::SUCCEEDED,
-                    &udp_socket.local_addr()?,
+                    udp_socket.local_addr()?,
                 )
                 .await?;
 
-                let session = UdpAssociateSession {
-                    client_addr: stream.peer_addr()?,
-                    udp_socket: Arc::clone(&udp_socket),
-                };
-
-                self.handle_udp_traffic(session, stream).await?;
+                self.handle_udp_traffic(stream, udp_socket, stream.peer_addr()?).await?;
             }
             _ => {
                 self.command_reply_by_atype(stream, response_code::COMMAND_NOT_SUPPORTED, atype)
@@ -476,11 +476,13 @@ impl SocksInboundHandler {
 
     async fn handle_udp_traffic(
         &self,
-        session: UdpAssociateSession,
+        // session: UdpAssociateSession,
         tcp_stream: &mut TcpStream,
+        udp_socket: UdpSocket,
+        client_addr: SocketAddr,
     ) -> SocksResult<()> {
-        let udp_socket = session.udp_socket;
-        let client_addr = session.client_addr;
+        // let udp_socket = session.udp_socket;
+        // let client_addr = session.client_addr;
         let mut udp_buffer = vec![0u8; 65507];
         let mut tcp_buffer = [0u8; 1];
 
@@ -499,8 +501,8 @@ impl SocksInboundHandler {
                             if src_addr == client_addr {
                                 if let Ok((target_addr, data)) = Self::parse_udp_packet(&udp_buffer[..size]).await {
                                     let socket_addr = match target_addr {
-                                        SocksAddr::Ip(addr) => addr,
-                                        SocksAddr::Domain(domain, port) => {
+                                        SocksAddr::SocketAddr(addr) => addr,
+                                        SocksAddr::DomainNameAddr(domain, port) => {
                                             // hostname lookup
                                             let mut addrs = tokio::net::lookup_host((domain, port)).await?;
                                             addrs.next().ok_or_else(||
@@ -528,11 +530,11 @@ impl SocksInboundHandler {
                 result = tcp_stream.read(&mut tcp_buffer) => {
                     match result {
                         Ok(0) => {
-                            log::debug!("TCP connection closed by client");
+                            log::debug!("TCP control connection closed by client");
                             break;
                         }
                         Err(e) => {
-                            log::debug!("TCP read error: {}", e);
+                            log::debug!("TCP control connection error: {}", e);
                             break;
                         }
                        _ => {}
@@ -541,7 +543,7 @@ impl SocksInboundHandler {
             }
         }
 
-        log::info!("SOCKS5 UDP session ended for client: {}", client_addr);
+        log::info!("SOCKS5 UDP relay session ended for client: {}", client_addr);
         Ok(())
     }
 
@@ -590,7 +592,7 @@ impl SocksInboundHandler {
                 //     .ok_or(IoError::new(IoErrorKind::Other, "No IP found for domain"))?;
 
                 (
-                    SocksAddr::Domain(domain, port),
+                    SocksAddr::DomainNameAddr(domain, port),
                     // SocketAddr::from((addr.ip(), port)),
                     1 + domain_len + 2,
                 )
@@ -645,7 +647,7 @@ impl SocksInboundHandler {
         &mut self,
         stream: &mut TcpStream,
         resp: u8,
-        bind_addr: &SocketAddr,
+        bind_addr: SocketAddr,
     ) -> IoResult<()> {
         let buf = &mut self.buf;
         buf.clear();
@@ -660,10 +662,6 @@ impl SocksInboundHandler {
                 buf.extend_from_slice(&v4.ip().octets()); // 4 bytes
                 buf.extend_from_slice(&v4.port().to_be_bytes()); // 2 bytes
             }
-            // (0x03,SocksAddr::Domain(domain, port)) => {
-            //     // DOMAIN: 1 byte len(=0) + 0 byte domain + 2 bytes PORT
-            //     buf.extend(std::iter::repeat(0u8).take(3));
-            // }
             SocketAddr::V6(v6) => {
                 buf.put_u8(0x04); // ATYP = IPv6
                 buf.extend_from_slice(&v6.ip().octets()); // 16 bytes
