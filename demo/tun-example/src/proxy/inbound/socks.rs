@@ -2,7 +2,6 @@ use async_trait::async_trait;
 use bytes::{BufMut, BytesMut};
 use socket2::{Domain, Protocol, Socket, Type};
 use std::{
-    collections::HashMap,
     io::{Error as IoError, ErrorKind as IoErrorKind, Result as IoResult},
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
     sync::Arc,
@@ -11,7 +10,7 @@ use thiserror::Error;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpStream, UdpSocket},
-    sync::RwLock,
+    sync::{OnceCell},
 };
 
 use super::InboundHandler;
@@ -38,7 +37,7 @@ pub(super) mod socks_command {
 #[allow(dead_code)]
 pub(super) mod atype {
     pub const IPV4: u8 = 0x01;
-    pub const DOMAIN: u8 = 0x03;
+    pub const DOMAIN_NAME: u8 = 0x03;
     pub const IPV6: u8 = 0x04;
 }
 
@@ -271,7 +270,7 @@ impl SocksInboundHandler {
         }
 
         let dst_addr = match atype {
-            0x01 => {
+            atype::IPV4 => {
                 let mut ip_bytes: [u8; 4] = [0u8; 4];
                 let mut port_bytes: [u8; 2] = [0u8; 2];
 
@@ -282,7 +281,7 @@ impl SocksInboundHandler {
                 let port = u16::from_be_bytes(port_bytes);
                 SocksAddr::from((ip, port))
             }
-            0x03 => {
+            atype::DOMAIN_NAME => {
                 buf.resize(1, 0);
                 stream.read_exact(buf.as_mut()).await?;
                 let domain_len = buf[0] as usize;
@@ -299,8 +298,6 @@ impl SocksInboundHandler {
 
                 buf.resize(domain_len, 0);
                 stream.read_exact(buf.as_mut()).await?;
-
-                // std::str::from_utf8(buf.as_ref());
 
                 let Ok(domain) = String::from_utf8(buf.to_vec()) else {
                     // stream
@@ -323,7 +320,7 @@ impl SocksInboundHandler {
 
                 SocksAddr::DomainNameAddr(domain, port)
             }
-            0x04 => {
+            atype::IPV6 => {
                 let mut ip_bytes: [u8; 16] = [0u8; 16];
                 let mut port_bytes: [u8; 2] = [0u8; 2];
 
@@ -486,7 +483,7 @@ impl SocksInboundHandler {
         udp_socket: UdpSocket,
         client_tcp_addr: SocketAddr,
     ) -> SocksResult<()> {
-        let mut udp_buffer = vec![0u8; 65535];
+        let mut udp_buffer = vec![0u8; 1500];
         let mut tcp_buffer = [0u8; 1];
 
         log::info!(
@@ -496,7 +493,7 @@ impl SocksInboundHandler {
         );
 
         // let client_mapping = Arc::new(RwLock::new(HashMap::new()));
-        let client_mapping = Arc::new(RwLock::new(None::<SocketAddr>));
+        let client_mapping = Arc::new(OnceCell::<SocketAddr>::new());
 
         loop {
             tokio::select! {
@@ -510,69 +507,53 @@ impl SocksInboundHandler {
                         }
                     };
                     let data = &udp_buffer[..n];
-                    
+
                     // client first req
-                    if client_mapping.read().await.is_none() {
-                        let mut mapping = client_mapping.write().await;
-                        mapping.get_or_insert(peer_addr);
-                        log::trace!("Mapped client {}", peer_addr);
-                    }
+                    let client_udp_addr = client_mapping.get_or_init(async || peer_addr ).await;
+                    log::trace!("current client is :{}", peer_addr);
 
-                    if let Some(client_udp_addr) = *client_mapping.read().await {
-                        if client_udp_addr == peer_addr {
-                            let (target_addr, data) = match Self::parse_udp_packet(data).await {
-                                Ok(r) => r,
-                                Err(e) => {
-                                    log::debug!("Failed to parse UDP packet from {}: {}", client_tcp_addr, e);
-                                    continue;
-                                }
-                            };
-
-                            log::debug!(
-                                "UDP request from client {} to target {}, {} bytes",
-                                client_tcp_addr,
-                                target_addr,
-                                data.len()
-                            );
-
-                            let socket_addr = match target_addr {
-                                SocksAddr::SocketAddr(addr) => addr,
-                                SocksAddr::DomainNameAddr(domain, port) => {
-                                    // hostname lookup
-                                    let mut addrs = tokio::net::lookup_host((domain, port)).await?;
-                                    addrs.next().ok_or_else(||
-                                        IoError::new(IoErrorKind::Other, "No IP found for domain")
-                                    )?
-                                }
-                            };
-
-                            if let Err(e) = udp_socket.send_to(data, socket_addr).await {
-                                log::debug!("Failed to send UDP data to {}: {}", socket_addr, e);
-                            }
-                        } else {
-                            let client_addr = {
-                                let mapping = client_mapping.read().await;
-                                mapping.as_ref().and_then(|client_addr| {
-                                    Some(*client_addr)
-                                })
-                            };
-
-                            let Some(client_udp_addr) = client_addr else {
-                                log::debug!("No client mapping found for server {}, ignoring packet", peer_addr);
+                    if *client_udp_addr == peer_addr {
+                        let (target_addr, data) = match Self::parse_udp_packet(data).await {
+                            Ok(r) => r,
+                            Err(e) => {
+                                log::debug!("Failed to parse UDP packet from {}: {}", client_tcp_addr, e);
                                 continue;
-                            };
+                            }
+                        };
 
-                            log::debug!(
-                                "UDP response from server {} to client {}, {} bytes",
-                                peer_addr,
-                                client_udp_addr,
-                                data.len()
-                            );
+                        log::debug!(
+                            "UDP request from {} -> {}, {} bytes",
+                            client_tcp_addr,
+                            target_addr,
+                            data.len()
+                        );
 
-                            let packet = Self::build_udp_packet(&peer_addr, data)?;
-                            udp_socket.send_to(&packet, client_udp_addr).await?;
+                        let socket_addr = match target_addr {
+                            SocksAddr::SocketAddr(addr) => addr,
+                            SocksAddr::DomainNameAddr(domain, port) => {
+                                // hostname lookup
+                                let mut addrs = tokio::net::lookup_host((domain, port)).await?;
+                                addrs.next().ok_or_else(||
+                                    IoError::new(IoErrorKind::Other, "No IP found for domain")
+                                )?
+                            }
+                        };
+
+                        if let Err(e) = udp_socket.send_to(data, socket_addr).await {
+                            log::debug!("Failed to send UDP data to {}: {}", socket_addr, e);
                         }
+                    } else {
+                        log::debug!(
+                            "UDP response from {} -> {}, {} bytes",
+                            peer_addr,
+                            client_udp_addr,
+                            data.len()
+                        );
+
+                        let packet = Self::build_udp_packet(&peer_addr, data)?;
+                        udp_socket.send_to(&packet, client_udp_addr).await?;
                     }
+
                 }
                 result = tcp_stream.read(&mut tcp_buffer) => {
                     match result {
@@ -630,7 +611,7 @@ impl SocksInboundHandler {
                 let port = u16::from_be_bytes([packet[8], packet[9]]);
                 (SocksAddr::from((ip, port)), 10)
             }
-            atype::DOMAIN => {
+            atype::DOMAIN_NAME => {
                 let domain_len = packet[4] as usize;
                 if packet.len() < 7 + domain_len {
                     return Err(SocksError::UdpPacketTooShort);
@@ -638,20 +619,9 @@ impl SocksInboundHandler {
                 let domain_bytes = &packet[5..5 + domain_len];
                 let domain = String::from_utf8(domain_bytes.to_vec())
                     .map_err(|_| SocksError::InvalidUtf8 { field: "domain" })?;
-                // let domain_addr = Self::lookup_host(domain).await?;
+                
                 let port = u16::from_be_bytes([packet[5 + domain_len], packet[6 + domain_len]]);
-
-                // domain lookup
-                // let mut addrs = tokio::net::lookup_host(domain).await?;
-                // let addr = addrs
-                //     .next()
-                //     .ok_or(IoError::new(IoErrorKind::Other, "No IP found for domain"))?;
-
-                (
-                    SocksAddr::DomainNameAddr(domain, port),
-                    // SocketAddr::from((addr.ip(), port)),
-                    7 + domain_len,
-                )
+                (SocksAddr::DomainNameAddr(domain, port), 7 + domain_len)
             }
             atype::IPV6 => {
                 if packet.len() < 22 {
