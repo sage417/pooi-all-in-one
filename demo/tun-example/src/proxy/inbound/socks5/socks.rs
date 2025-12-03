@@ -6,15 +6,17 @@ use std::{
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
     sync::Arc,
 };
-use thiserror::Error;
+
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpStream, UdpSocket},
-    sync::{OnceCell},
+    sync::OnceCell,
 };
 
-use super::InboundHandler;
-use crate::session::SocksAddr;
+use crate::proxy::inbound::{
+    InboundHandler,
+    socks5::{SocksAddr, SocksError, SocksResult, atype},
+};
 
 // RFC 1928
 const SOCKS5_VER: u8 = 0x05;
@@ -35,13 +37,6 @@ pub(super) mod socks_command {
 }
 
 #[allow(dead_code)]
-pub(super) mod atype {
-    pub const IPV4: u8 = 0x01;
-    pub const DOMAIN_NAME: u8 = 0x03;
-    pub const IPV6: u8 = 0x04;
-}
-
-#[allow(dead_code)]
 pub(super) mod response_code {
     pub const SUCCEEDED: u8 = 0x00;
     pub const FAILURE: u8 = 0x01;
@@ -54,33 +49,7 @@ pub(super) mod response_code {
     pub const ADDR_TYPE_NOT_SUPPORTED: u8 = 0x08;
 }
 
-type SocksResult<T> = Result<T, SocksError>;
-
-#[derive(Error, Debug)]
-pub enum SocksError {
-    #[error("IO error: {0}")]
-    Io(#[from] IoError),
-    #[error("Invalid SOCKS version: expected {expected}, got {got}")]
-    InvalidVersion { expected: u8, got: u8 },
-    #[error("No acceptable authentication methods")]
-    NoAcceptableMethods,
-    #[error("Authentication failed for user: {username}")]
-    AuthFailed { username: String },
-    #[error("Invalid UTF-8 in {field}")]
-    InvalidUtf8 { field: &'static str },
-    #[error("Command not supported: 0x{code:02x}")]
-    CommandNotSupported { code: u8 },
-    #[error("Address type not supported: 0x{atype:02x}")]
-    AddrTypeNotSupported { atype: u8 },
-    #[error("Domain length invalid: {len}")]
-    InvalidDomainLength { len: usize },
-    #[error("UDP packet too short")]
-    UdpPacketTooShort,
-    #[error("UDP packet invalid")]
-    UdpPacketInvalid,
-}
-
-pub(super) struct SocksInboundHandler {
+pub(crate) struct SocksInboundHandler {
     authenticator: Arc<dyn Authenticator>,
     buf: BytesMut,
 }
@@ -90,7 +59,7 @@ pub trait Authenticator: Send + Sync {
     fn authenticate(&self, username: &str, password: &str) -> bool;
 }
 
-pub(super) struct SimpleAuthenticator {
+pub(crate) struct SimpleAuthenticator {
     username: String,
     password: String,
     enabled: bool,
@@ -185,7 +154,7 @@ impl SocksInboundHandler {
                 .write_all(&[SOCKS5_AUTH_VER, response_code::FAILURE])
                 .await?;
             stream.shutdown().await?;
-            return Err(SocksError::InvalidUtf8 { field: "uname" });
+            return Err(SocksError::InvalidUtf8Encoding { field: "uname" });
         };
 
         buf.resize(1, 0);
@@ -201,7 +170,7 @@ impl SocksInboundHandler {
                 .write_all(&[SOCKS5_AUTH_VER, response_code::FAILURE])
                 .await?;
             stream.shutdown().await?;
-            return Err(SocksError::InvalidUtf8 { field: "pass" });
+            return Err(SocksError::InvalidUtf8Encoding { field: "pass" });
         };
 
         // +----+--------+
@@ -310,7 +279,7 @@ impl SocksInboundHandler {
                         atype,
                     )
                     .await?;
-                    return Err(SocksError::InvalidUtf8 { field: "domain" });
+                    return Err(SocksError::InvalidUtf8Encoding { field: "domain" });
                 };
 
                 let mut port_bytes: [u8; 2] = [0u8; 2];
@@ -618,8 +587,8 @@ impl SocksInboundHandler {
                 }
                 let domain_bytes = &packet[5..5 + domain_len];
                 let domain = String::from_utf8(domain_bytes.to_vec())
-                    .map_err(|_| SocksError::InvalidUtf8 { field: "domain" })?;
-                
+                    .map_err(|_| SocksError::InvalidUtf8Encoding { field: "domain" })?;
+
                 let port = u16::from_be_bytes([packet[5 + domain_len], packet[6 + domain_len]]);
                 (SocksAddr::DomainNameAddr(domain, port), 7 + domain_len)
             }

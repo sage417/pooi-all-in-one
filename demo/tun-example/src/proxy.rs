@@ -6,7 +6,7 @@ use std::{fmt, io::Result as IoResult, net::SocketAddr};
 use thiserror::Error;
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::session::{SocksAddr, TransportProtocol};
+use crate::{proxy::inbound::socks5::SocksAddr, session::TransportProtocol};
 
 /// A reliable transport for both inbound and outbound handlers.
 pub trait ProxyStream: AsyncRead + AsyncWrite + Send + Sync + Unpin {}

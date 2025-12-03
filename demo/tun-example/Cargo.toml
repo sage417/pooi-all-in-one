@@ -29,6 +29,7 @@ lazy_static = "1.5.0"
 lru = "0.16.2"
 prost = "0.14"
 tokio-util = "0.7.17"
+trait-variant = "0.1.2"
 
 [build-dependencies]
 prost-build = "0.14"

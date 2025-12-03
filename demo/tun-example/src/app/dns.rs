@@ -15,7 +15,10 @@ use std::{collections::HashMap, num::NonZeroUsize};
 use tokio::sync::{Mutex, RwLock};
 
 use super::dispatcher::Dispatcher;
-use crate::{proxy::datagram::*, session::*};
+use crate::{
+    proxy::{datagram::*, inbound::socks5::SocksAddr},
+    session::*,
+};
 
 pub type SyncDnsClient = Arc<RwLock<DnsClient>>;
 type DNSCache = Arc<Mutex<LruCache<String, CacheEntry>>>;

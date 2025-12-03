@@ -1,4 +1,3 @@
-pub(super) mod socks;
 use socket2::{Domain, Protocol, Socket, Type};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -6,9 +5,11 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
-use self::socks::SocksInboundHandler;
-use crate::{config::Inbound as InBoundConfig, proxy::inbound::socks::SimpleAuthenticator};
+use self::socks5::{SimpleAuthenticator, SocksInboundHandler};
+use crate::config::Inbound as InBoundConfig;
 use async_trait::async_trait;
+
+pub(crate) mod socks5;
 
 pub struct InboundManager {
     inbound_configs: Vec<InBoundConfig>,

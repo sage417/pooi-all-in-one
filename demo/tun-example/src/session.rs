@@ -1,6 +1,4 @@
-pub(crate) mod socks_addr;
-
-pub use crate::session::socks_addr::SocksAddr;
+use crate::proxy::inbound::socks5::SocksAddr;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
 
 pub type StreamId = u64;
