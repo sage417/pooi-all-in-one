@@ -11,17 +11,16 @@ use tokio::{
     net::UdpSocket,
 };
 
-use crate::proxy::inbound::socks5::udp_association::UdpInboundWrite;
-
-use super::{SocksAddr, SocksError, udp_association::UdpAssociationManager};
-
-const MAXIMUM_UDP_PAYLOAD_SIZE: usize = 1500;
+use super::{
+    MAXIMUM_UDP_PAYLOAD_SIZE, SocksAddr, SocksError,
+    udp_association::{UdpAssociationManager, UdpInboundWrite},
+};
 
 pub struct UdpRelayServer {
     // context: Arc<ServiceContext>,
-    ttl: Option<Duration>,
-    capacity: Option<usize>,
-    listener: Arc<UdpSocket>,
+    pub(crate) ttl: Option<Duration>,
+    pub(crate) capacity: Option<usize>,
+    pub(crate) listener: Arc<UdpSocket>,
     // balancer: PingBalancer,
 }
 
@@ -57,10 +56,7 @@ impl UdpRelayServer {
 
     /// Run server accept loop
     pub async fn run(self) -> io::Result<()> {
-        log::info!(
-            "shadowsocks socks5 UDP listening on {}",
-            self.listener.local_addr()?
-        );
+        log::info!("socks5 UDP listening on {}", self.listener.local_addr()?);
 
         let (mut manager, cleanup_interval, mut keepalive_rx) = UdpAssociationManager::new(
             // self.context.clone(),
@@ -185,7 +181,12 @@ impl UdpAssociateHeader {
 }
 
 impl UdpInboundWrite for Socks5UdpInboundWriter {
-    async fn send_to(&self, peer_addr: SocketAddr, remote_addr: &SocksAddr, data: &[u8]) -> io::Result<()> {
+    async fn send_to(
+        &self,
+        peer_addr: SocketAddr,
+        remote_addr: &SocksAddr,
+        data: &[u8],
+    ) -> io::Result<()> {
         let remote_addr = match remote_addr {
             SocksAddr::SocketAddr(sa) => {
                 // Try to convert IPv4 mapped IPv6 address if server is running on dual-stack mode
@@ -210,6 +211,9 @@ impl UdpInboundWrite for Socks5UdpInboundWriter {
         header.write_to_buf(&mut payload_buffer);
         payload_buffer.put_slice(data);
 
-        self.inbound.send_to(&payload_buffer, peer_addr).await.map(|_| ())
+        self.inbound
+            .send_to(&payload_buffer, peer_addr)
+            .await
+            .map(|_| ())
     }
 }

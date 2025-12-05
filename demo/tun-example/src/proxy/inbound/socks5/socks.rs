@@ -5,6 +5,7 @@ use std::{
     io::{Error as IoError, ErrorKind as IoErrorKind, Result as IoResult},
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
     sync::Arc,
+    time::Duration,
 };
 
 use tokio::{
@@ -15,7 +16,7 @@ use tokio::{
 
 use crate::proxy::inbound::{
     InboundHandler,
-    socks5::{SocksAddr, SocksError, SocksResult, atype},
+    socks5::{SocksAddr, SocksError, SocksResult, atype, udp_relay::UdpRelayServer},
 };
 
 // RFC 1928
@@ -413,27 +414,27 @@ impl SocksInboundHandler {
                 }
             }
             socks_command::UDP_ASSOCIATE => {
-                let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
-                socket.set_broadcast(true)?;
-                socket.set_nonblocking(true)?;
-                socket.bind(&socket2::SockAddr::from(SocketAddr::new(
-                    stream.local_addr()?.ip(),
-                    0,
-                )))?;
-                log::debug!("UDP ASSOCIATE socket bound to {:?}", socket.local_addr()?);
+                // let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
+                // socket.set_broadcast(true)?;
+                // socket.set_nonblocking(true)?;
+                // socket.bind(&socket2::SockAddr::from(SocketAddr::new(
+                //     stream.local_addr()?.ip(),
+                //     0,
+                // )))?;
+                // log::debug!("UDP ASSOCIATE socket bound to {:?}", socket.local_addr()?);
 
-                let udp_socket = UdpSocket::from_std(socket.into())?;
+                // let udp_socket = UdpSocket::from_std(socket.into())?;
                 // let udp_socket = Arc::new(udp_socket);
 
                 self.command_reply_by_bind_addr(
                     stream,
                     response_code::SUCCEEDED,
-                    udp_socket.local_addr()?,
+                    "192.168.158.151:8889".parse().unwrap(),
                 )
                 .await?;
 
-                self.handle_udp_traffic(stream, udp_socket, stream.peer_addr()?)
-                    .await?;
+                // self.handle_udp_traffic(stream, udp_socket, stream.peer_addr()?)
+                //     .await?;
             }
             _ => {
                 self.command_reply_by_atype(stream, response_code::COMMAND_NOT_SUPPORTED, atype)

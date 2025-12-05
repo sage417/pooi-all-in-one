@@ -6,22 +6,31 @@ mod config {
 }
 mod session;
 
+use socket2::{Domain, Protocol, Socket, Type};
+use std::{
+    io,
+    net::{IpAddr, SocketAddr},
+    pin::Pin,
+    sync::Arc,
+};
 #[allow(unused_imports)]
 use std::{net::Ipv4Addr, time::Duration};
-use std::{pin::Pin, sync::Arc};
 use thiserror::Error;
 #[allow(unused_imports)]
 use tokio::sync::RwLock;
-use tokio::sync::oneshot::Sender;
+use tokio::{net::UdpSocket, sync::oneshot::Sender};
 use tokio_util::sync::CancellationToken;
 
 #[allow(unused_imports)]
 use crate::app::dns::DnsClient;
-use crate::app::{
-    dns::SyncDnsClient, outbound::manager::SyncOutboundManager, router::SyncRouter,
-    stat_manager::SyncStatManager,
-};
 use crate::proxy::inbound::{InboundManager, SimpleInboundHandlerFactory};
+use crate::{
+    app::{
+        dns::SyncDnsClient, outbound::manager::SyncOutboundManager, router::SyncRouter,
+        stat_manager::SyncStatManager,
+    },
+    proxy::inbound::socks5::udp_relay::UdpRelayServer,
+};
 
 #[cfg(any(
     target_os = "windows",
@@ -75,6 +84,8 @@ pub fn start_service() -> Result<(), Error> {
     log::info!("runtime worker num: {:?}", rt.metrics().num_workers());
 
     rt.block_on(async {
+        tokio::spawn(run_udp_relay());
+
         let mut inbound_handles;
         let mut inbound_manager: InboundManager;
 
@@ -254,4 +265,23 @@ async fn handle_pkt(pkt: &[u8], dev: &AsyncDevice) -> std::io::Result<()> {
         dev.send(&buf).await?;
     }
     Ok(())
+}
+
+async fn run_udp_relay() -> io::Result<()> {
+    let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
+    socket.set_broadcast(true)?;
+    socket.set_nonblocking(true)?;
+    socket.bind(&socket2::SockAddr::from(SocketAddr::new(
+        "0.0.0.0".parse().unwrap(),
+        8889,
+    )))?;
+    log::debug!("UDP LISTEN socket bound to {:?}", socket.local_addr()?);
+    let udp_socket = UdpSocket::from_std(socket.into())?;
+    let udp_relay_server = UdpRelayServer {
+        ttl: Some(Duration::from_mins(5)),
+        capacity: Some(32),
+        listener: Arc::new(udp_socket),
+    };
+
+    udp_relay_server.run().await
 }

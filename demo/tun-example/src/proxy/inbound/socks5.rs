@@ -14,6 +14,8 @@ pub(crate) mod udp_association;
 pub(crate) mod udp_relay;
 pub(crate) use self::socks::{SimpleAuthenticator, SocksInboundHandler};
 
+const MAXIMUM_UDP_PAYLOAD_SIZE: usize = 1500;
+
 pub(crate) mod atype {
     pub const IPV4: u8 = 0x01;
     pub const DOMAIN_NAME: u8 = 0x03;
