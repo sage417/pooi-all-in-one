@@ -96,7 +96,7 @@ pub async fn listen_inbound(
                     }
                 });
             }
-        _ = cancel_token.cancelled() => {
+            _ = cancel_token.cancelled() => {
                 log::info!(
                     "Stopping inbound listener on {}://{}:{}",
                     inbound_config.protocol,

@@ -429,7 +429,7 @@ impl SocksInboundHandler {
                 self.command_reply_by_bind_addr(
                     stream,
                     response_code::SUCCEEDED,
-                    "192.168.158.151:8889".parse().unwrap(),
+                    stream.local_addr()?,
                 )
                 .await?;
 

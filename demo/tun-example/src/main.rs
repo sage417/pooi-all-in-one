@@ -84,12 +84,21 @@ pub fn start_service() -> Result<(), Error> {
     log::info!("runtime worker num: {:?}", rt.metrics().num_workers());
 
     rt.block_on(async {
-        tokio::spawn(run_udp_relay());
-
         let mut inbound_handles;
         let mut inbound_manager: InboundManager;
 
         loop {
+            let cancel_token = CancellationToken::new();
+
+            let udp_relay_server = build_udp_relay().await?;
+            let udp_relay_addr = udp_relay_server.listener.clone().local_addr()?;
+            log::info!("udp_relay_server listening on {}", udp_relay_addr);
+
+            let cancel_token_cloned = cancel_token.clone();
+            let upd_relay_handle = tokio::spawn(async move {
+                let _ = udp_relay_server.run(cancel_token_cloned).await;
+            });
+
             inbound_manager = InboundManager::new(
                 vec![crate::config::Inbound {
                     address: String::from("0.0.0.0"),
@@ -101,12 +110,12 @@ pub fn start_service() -> Result<(), Error> {
                 Arc::new(SimpleInboundHandlerFactory {}),
             );
 
-            let cancel_token = CancellationToken::new();
-
             inbound_handles = inbound_manager
                 .start_all(cancel_token.clone())
                 .await
                 .expect("Failed to start inbound handlers");
+
+            inbound_handles.push(upd_relay_handle);
 
             #[cfg(unix)]
             {
@@ -119,10 +128,13 @@ pub fn start_service() -> Result<(), Error> {
                     _ = ctrl_c => {
                         log::info!("Received Ctrl+C, shutting down gracefully...");
                         cancel_token.cancel();
+                        let _ = futures::future::join_all(inbound_handles).await;
                         break;
                     }
                     _ = sighup.recv() => {
                         log::info!("Received SIGHUP, reloading configuration...");
+                        cancel_token.cancel();
+                        let _ = futures::future::join_all(inbound_handles).await;
                         continue;
                     }
                 }
@@ -136,9 +148,8 @@ pub fn start_service() -> Result<(), Error> {
                 break;
             }
         }
-
-        let _ = futures::future::join_all(inbound_handles);
-    });
+        Ok::<(), Error>(())
+    })?;
 
     rt.shutdown_timeout(Duration::from_secs(1));
 
@@ -267,21 +278,20 @@ async fn handle_pkt(pkt: &[u8], dev: &AsyncDevice) -> std::io::Result<()> {
     Ok(())
 }
 
-async fn run_udp_relay() -> io::Result<()> {
+async fn build_udp_relay() -> io::Result<UdpRelayServer> {
     let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
     socket.set_broadcast(true)?;
     socket.set_nonblocking(true)?;
     socket.bind(&socket2::SockAddr::from(SocketAddr::new(
         "0.0.0.0".parse().unwrap(),
-        8889,
+        8888,
     )))?;
-    log::debug!("UDP LISTEN socket bound to {:?}", socket.local_addr()?);
+
     let udp_socket = UdpSocket::from_std(socket.into())?;
     let udp_relay_server = UdpRelayServer {
         ttl: Some(Duration::from_mins(5)),
         capacity: Some(32),
         listener: Arc::new(udp_socket),
     };
-
-    udp_relay_server.run().await
+    Ok(udp_relay_server)
 }

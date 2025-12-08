@@ -10,6 +10,7 @@ use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::UdpSocket,
 };
+use tokio_util::sync::CancellationToken;
 
 use super::{
     MAXIMUM_UDP_PAYLOAD_SIZE, SocksAddr, SocksError,
@@ -55,8 +56,8 @@ impl UdpRelayServer {
     }
 
     /// Run server accept loop
-    pub async fn run(self) -> io::Result<()> {
-        log::info!("socks5 UDP listening on {}", self.listener.local_addr()?);
+    pub async fn run(self,  cancel_token: CancellationToken,) -> io::Result<()> {
+        log::info!("socks5 UDP listening on {}", self.local_addr()?);
 
         let (mut manager, cleanup_interval, mut keepalive_rx) = UdpAssociationManager::new(
             // self.context.clone(),
@@ -128,6 +129,9 @@ impl UdpRelayServer {
                             err
                         );
                     }
+                }
+                _ = cancel_token.cancelled() => {
+                    break Ok(());
                 }
             }
         }

@@ -9,7 +9,6 @@ socket.socket = socks.socksocket
 def udp_echo_client(server_ip, server_port):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-    
     try:
         for i in range(50000):
             message = f'Hello, UDP server! Message #{i+1}'
@@ -24,6 +23,7 @@ def udp_echo_client(server_ip, server_port):
     finally:
         sock.close()
 
+# ncat -u -l 0.0.0.0 1234 --keep-open --exec "/bin/cat"
 if __name__ == "__main__":
     server_ip = "192.168.158.151"  # server ip
     server_port = 1234       # server port
