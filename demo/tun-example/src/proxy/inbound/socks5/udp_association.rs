@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     io::{self, ErrorKind},
     marker::PhantomData,
     net::{IpAddr, Ipv6Addr, SocketAddr, SocketAddrV6},
@@ -9,7 +10,7 @@ use std::{
 use crate::proxy::inbound::socks5::{MAXIMUM_UDP_PAYLOAD_SIZE, SocksAddr};
 use bytes::Bytes;
 use moka::future::Cache;
-use rand::{Rng, rng};
+use rand::{Rng, SeedableRng, rngs::SmallRng};
 use socket2::{Domain, Protocol, Socket, Type};
 use tokio::{net::UdpSocket, task::JoinHandle};
 
@@ -68,12 +69,15 @@ where
     server_session_expire_duration: Duration,
 }
 
-#[inline]
-fn generate_client_session_id() -> u64 {
-    let mut rng = rng();
-    rng.random_range(1..=u64::MAX)
+thread_local! {
+    static CLIENT_SESSION_RNG: RefCell<SmallRng> = RefCell::new(SmallRng::from_os_rng());
 }
 
+/// Generate an AEAD-2022 Client SessionID
+#[inline]
+pub fn generate_client_session_id() -> u64 {
+    CLIENT_SESSION_RNG.with(|rng| rng.borrow_mut().random_range(1..=u64::MAX))
+}
 impl<W> UdpAssociationManager<W>
 where
     W: UdpInboundWrite + Clone + Send + Sync + Unpin + 'static,
@@ -119,25 +123,46 @@ where
         target_addr: SocksAddr,
         data: &[u8],
     ) -> io::Result<()> {
+        if let Some(assoc) = self.assoc_map.get(&peer_addr).await {
+            return assoc.try_send((target_addr, Bytes::copy_from_slice(data)));
+        };
+
         log::debug!("created udp association for {}", peer_addr);
 
-        let assoc = self
-            .assoc_map
-            .entry(peer_addr)
-            .or_insert(Arc::new(UdpAssociation::new(
-                // self.context.clone(),
-                peer_addr,
-                self.keepalive_tx.clone(),
-                // self.balancer.clone(),
-                self.respond_writer.clone(),
-                self.session_expire_duration,
-            )))
-            .await
-            .into_value();
+        let assoc = Arc::new(UdpAssociation::new(
+            // self.context.clone(),
+            peer_addr,
+            self.keepalive_tx.clone(),
+            // self.balancer.clone(),
+            self.respond_writer.clone(),
+            self.session_expire_duration,
+        ));
 
         assoc.try_send((target_addr, Bytes::copy_from_slice(data)))?;
+        self.assoc_map.insert(peer_addr, assoc).await;
 
         Ok(())
+
+        // let assoc_entry = self
+        //     .assoc_map
+        //     .entry(peer_addr)
+        //     .or_insert_with(async {
+        //         log::debug!("created udp association for {}", peer_addr);
+
+        //         Arc::new(UdpAssociation::new(
+        //             // self.context.clone(),
+        //             peer_addr,
+        //             self.keepalive_tx.clone(),
+        //             // self.balancer.clone(),
+        //             self.respond_writer.clone(),
+        //             self.session_expire_duration,
+        //         ))
+        //     })
+        //     .await;
+
+        // assoc_entry
+        //     .value()
+        //     .try_send((target_addr, Bytes::copy_from_slice(data)))
     }
 
     /// Cleanup expired associations
@@ -214,6 +239,8 @@ where
         JoinHandle<()>,
         tokio::sync::mpsc::Sender<(SocksAddr, Bytes)>,
     ) {
+        let client_session_id = generate_client_session_id();
+
         let mut assoc = Self {
             // context,
             peer_addr,
@@ -226,7 +253,7 @@ where
             respond_writer,
             // client_session_id must be random generated,
             // server use this ID to identify every independent clients.
-            client_session_id: generate_client_session_id(),
+            client_session_id,
             client_packet_id: 0,
             // server_session: None,
             server_session_expire_duration,

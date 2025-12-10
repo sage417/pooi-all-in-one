@@ -8,7 +8,7 @@ mod session;
 
 use socket2::{Domain, Protocol, Socket, Type};
 use std::{
-    io,
+    cmp, io,
     net::{IpAddr, SocketAddr},
     pin::Pin,
     sync::Arc,
@@ -157,9 +157,11 @@ pub fn start_service() -> Result<(), Error> {
 }
 
 fn new_runtime() -> Result<tokio::runtime::Runtime, Error> {
+    let parallel = std::thread::available_parallelism()?;
+
     tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(2)
-        .thread_stack_size(128 * 1024)
+        .worker_threads(cmp::min(parallel.into(), 4))
+        .thread_stack_size(64 * 1024)
         .enable_all()
         .build()
         .map_err(Error::Io)

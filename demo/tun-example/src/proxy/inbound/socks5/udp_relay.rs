@@ -56,7 +56,7 @@ impl UdpRelayServer {
     }
 
     /// Run server accept loop
-    pub async fn run(self,  cancel_token: CancellationToken,) -> io::Result<()> {
+    pub async fn run(self, cancel_token: CancellationToken) -> io::Result<()> {
         log::info!("socks5 UDP listening on {}", self.local_addr()?);
 
         let (mut manager, cleanup_interval, mut keepalive_rx) = UdpAssociationManager::new(
