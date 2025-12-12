@@ -16,7 +16,7 @@ use tokio::{
 
 use crate::proxy::inbound::{
     InboundHandler,
-    socks5::{SocksAddr, SocksError, SocksResult, atype, udp_relay::UdpRelayServer},
+    socks5::{SocksAddr, SocksError, SocksResult, atype},
 };
 
 // RFC 1928
@@ -179,7 +179,7 @@ impl SocksInboundHandler {
         // +----+--------+
         // | 1  |   1    |
         // +----+--------+
-        if matches!(self.authenticator.authenticate(&uname, &pass), true) {
+        if self.authenticator.authenticate(&uname, &pass) {
             stream
                 .write_all(&[SOCKS5_AUTH_VER, response_code::SUCCEEDED])
                 .await?;
@@ -225,7 +225,7 @@ impl SocksInboundHandler {
         // let cmd = buf[1];
         // let atype = buf[3];
 
-        let [ver, cmd, _, atype] = *&buf[0..4] else {
+        let [ver, cmd, _, atype] = buf[0..4] else {
             return Err(SocksError::InvalidVersion {
                 expected: SOCKS5_VER,
                 got: 0u8,
@@ -256,7 +256,7 @@ impl SocksInboundHandler {
                 stream.read_exact(buf.as_mut()).await?;
                 let domain_len = buf[0] as usize;
 
-                if domain_len < 1 || domain_len > 255 {
+                if !(1..=255).contains(&domain_len) {
                     self.command_reply_by_atype(
                         stream,
                         response_code::ADDR_TYPE_NOT_SUPPORTED,
@@ -335,7 +335,7 @@ impl SocksInboundHandler {
                         let mut addrs = tokio::net::lookup_host((domain, port)).await?;
                         addrs
                             .next()
-                            .ok_or(IoError::new(IoErrorKind::Other, "No IP found for domain"))?
+                            .ok_or(IoError::other("No IP found for domain"))?
                     }
                 };
 
@@ -504,7 +504,7 @@ impl SocksInboundHandler {
                                 // hostname lookup
                                 let mut addrs = tokio::net::lookup_host((domain, port)).await?;
                                 addrs.next().ok_or_else(||
-                                    IoError::new(IoErrorKind::Other, "No IP found for domain")
+                                    IoError::other("No IP found for domain")
                                 )?
                             }
                         };
@@ -611,7 +611,7 @@ impl SocksInboundHandler {
             return Err(SocksError::UdpPacketInvalid);
         }
 
-        Ok((SocksAddr::from(addr), &packet[offset..]))
+        Ok((addr, &packet[offset..]))
     }
 
     fn build_udp_packet(target_addr: &SocketAddr, data: &[u8]) -> SocksResult<Vec<u8>> {
@@ -665,7 +665,7 @@ impl SocksInboundHandler {
             }
         }
 
-        stream.write_all(&buf).await
+        stream.write_all(buf).await
     }
 
     async fn command_reply_by_atype(
@@ -684,23 +684,23 @@ impl SocksInboundHandler {
         match atype {
             0x01 => {
                 // IPv4: 4 bytes IP + 2 bytes PORT
-                buf.extend(std::iter::repeat(0u8).take(6));
+                buf.extend(std::iter::repeat_n(0u8, 6));
             }
             0x03 => {
                 // DOMAIN: 1 byte len(=0) + 0 byte domain + 2 bytes PORT
-                buf.extend(std::iter::repeat(0u8).take(3));
+                buf.extend(std::iter::repeat_n(0u8, 3));
             }
             0x04 => {
                 // IPv6: 16 bytes IP + 2 bytes PORT
-                buf.extend(std::iter::repeat(0u8).take(18));
+                buf.extend(std::iter::repeat_n(0u8, 18));
             }
             _ => {
                 // IPv4: 4 bytes IP + 2 bytes PORT
-                buf.extend(std::iter::repeat(0u8).take(6));
+                buf.extend(std::iter::repeat_n(0u8, 6));
             }
         }
 
-        stream.write_all(&buf).await
+        stream.write_all(buf).await
     }
 }
 

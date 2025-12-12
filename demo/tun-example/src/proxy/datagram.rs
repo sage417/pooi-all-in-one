@@ -246,7 +246,7 @@ impl OutboundDatagramSendHalf for DomainResolveOutboundDatagramSendHalf {
                     .await?;
                 let ip = ips
                     .first()
-                    .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "no results"))?;
+                    .ok_or_else(|| io::Error::other("no results"))?;
                 self.0.send_to(buf, SocketAddr::new(*ip, *port)).await
             }
             SocksAddr::SocketAddr(addr) => self.0.send_to(buf, addr).await,

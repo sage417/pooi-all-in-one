@@ -124,7 +124,7 @@ impl DnsClient {
 
         return Ok(Self {
             dispatcher: None,
-            upstreams: upstreams,
+            upstreams,
             hosts,
             dns_cache: Arc::new(Mutex::new(LruCache::<String, CacheEntry>::new(
                 NonZeroUsize::new(512).unwrap(),

@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    io::{self, ErrorKind},
+    io,
     marker::PhantomData,
     net::{IpAddr, Ipv6Addr, SocketAddr, SocketAddrV6},
     sync::Arc,
@@ -459,7 +459,7 @@ where
                 let mut addrs = tokio::net::lookup_host((dname.as_str(), port)).await?;
                 let sa: SocketAddr = addrs
                     .next()
-                    .ok_or_else(|| io::Error::new(ErrorKind::Other, "No IP found for domain"))?;
+                    .ok_or_else(|| io::Error::other("No IP found for domain"))?;
                 // lookup_then!(self.context.context_ref(), dname, port, |sa| {
                 self.send_received_bypassed_packet(sa, data)
                     .await
@@ -664,7 +664,7 @@ where
         let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(Protocol::UDP))?;
         socket.set_broadcast(true)?;
         socket.set_nonblocking(true)?;
-        socket.bind(&socket2::SockAddr::from(SocketAddr::new(bind_ip.into(), 0)))?;
+        socket.bind(&socket2::SockAddr::from(SocketAddr::new(bind_ip, 0)))?;
         log::debug!("UDP ASSOCIATE socket bound to {:?}", socket.local_addr()?);
 
         UdpSocket::from_std(socket.into())

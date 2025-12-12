@@ -4,7 +4,7 @@ use tokio::io::{AsyncRead, AsyncReadExt};
 
 use std::{
     fmt,
-    io::{Error as IoError, ErrorKind as IoErrorKind},
+    io::{Error as IoError},
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
     slice,
 };
@@ -249,7 +249,7 @@ impl SocksAddr {
 impl Clone for SocksAddr {
     fn clone(&self) -> Self {
         match self {
-            SocksAddr::SocketAddr(addr) => SocksAddr::SocketAddr(addr.clone()),
+            SocksAddr::SocketAddr(addr) => SocksAddr::SocketAddr(*addr),
             SocksAddr::DomainNameAddr(domain, port) => {
                 SocksAddr::DomainNameAddr(domain.clone(), *port)
             }
@@ -333,7 +333,7 @@ impl TryFrom<(String, u16)> for SocksAddr {
             return Ok(Self::from((ip, port)));
         }
         if addr.len() > 0xff {
-            return Err(IoError::new(IoErrorKind::Other, "domain too long"));
+            return Err(IoError::other("domain too long"));
         }
         Ok(Self::DomainNameAddr(addr, port))
     }
