@@ -1,0 +1,45 @@
+version: "3"
+
+# networks:
+#   gitea:
+#     external: false
+
+services:
+  server:
+    image: public.ecr.aws/bitnami/gitea:1.25.3
+    container_name: gitea
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA_DOMAIN=gitea.pooi.app
+      - GITEA_ROOT_URL=https://gitea.pooi.app
+    restart: always
+    # networks:
+    #   - gitea
+    volumes:
+      - ./gitea:/bitnami/gitea
+#      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "3300:3000"
+      - "222:22"
+
+  postgresql:
+    image: bitnami/postgresql:17.2.0
+    container_name: postgresql
+    restart: unless-stopped
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - POSTGRESQL_USERNAME=bn_gitea
+      - POSTGRESQL_PASSWORD=
+      - POSTGRESQL_POSTGRES_PASSWORD=
+      - POSTGRESQL_DATABASE=bitnami_gitea
+      - POSTGRESQL_TIMEZONE=Asia/Shanghai
+      - POSTGRESQL_LOG_TIMEZONE=Asia/Shanghai
+    volumes:
+      - ./db:/bitnami/postgresql/data
+    healthcheck:
+      test: pg_isready --dbname='bitnami_gitea' --username='bn_gitea' || exit 1
+      interval: 5s
+      timeout: 2s
+      retries: 2
