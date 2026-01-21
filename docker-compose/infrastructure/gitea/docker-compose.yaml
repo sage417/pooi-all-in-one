@@ -25,7 +25,7 @@ services:
       - "222:22"
 
   postgresql:
-    image: bitnami/postgresql:17.2.0
+    image: public.ecr.aws/bitnami/postgresql:17-debian-12
     container_name: postgresql
     restart: unless-stopped
     environment:
