@@ -17,10 +17,11 @@
     <properties>
         <java.version>21</java.version>
         <guava.version>33.0.0-jre</guava.version>
-        <org.mapstruct.version>1.6.2</org.mapstruct.version>
-        <spring-security.version>5.8.13</spring-security.version>
+        <org.mapstruct.version>1.6.3</org.mapstruct.version>
+        <spring-security.version>5.8.16</spring-security.version>
         <!-- 2021.0.x aka Jubilee	2.6.x, 2.7.x (Starting with 2021.0.3)-->
         <spring-cloud.version>2021.0.9</spring-cloud.version>
+        <spring-boot.redission.version>3.52.0</spring-boot.redission.version>
         <skywalking-java-agent.version>9.5.0</skywalking-java-agent.version>
         <dynamicTp.version>1.2.2</dynamicTp.version>
     </properties>
@@ -80,7 +81,7 @@
         <dependency>
             <groupId>org.redisson</groupId>
             <artifactId>redisson-spring-boot-starter</artifactId>
-            <version>3.51.0</version>
+            <version>${spring-boot.redission.version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.redisson</groupId>
@@ -92,7 +93,7 @@
         <dependency>
             <groupId>org.redisson</groupId>
             <artifactId>redisson-spring-data-27</artifactId>
-            <version>3.51.0</version>
+            <version>${spring-boot.redission.version}</version>
         </dependency>
         <!-- redis end -->
 

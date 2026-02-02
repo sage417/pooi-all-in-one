@@ -62,6 +62,9 @@ management:
   endpoints:
     web.exposure:
       include: prometheus,health
+#  metrics:
+#    tags:
+#      application: ${spring.application.name}
 
 # flowable
 flowable:
@@ -81,6 +84,7 @@ grpc:
       address: discovery:/pooi-workflow-core
       negotiation-type: plaintext
   server:
+    port: 9091
     health-service-enabled: off
 
 # logging
