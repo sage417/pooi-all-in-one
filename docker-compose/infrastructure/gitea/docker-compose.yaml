@@ -20,6 +20,12 @@ services:
       - ./gitea:/bitnami/gitea
 #      - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+          test: curl -fSs server:3000/api/healthz || exit 1
+          start_period: 5s
+          interval: 15s
+          timeout: 5s
+          retries: 3
     ports:
       - "3300:3000"
       - "222:22"
@@ -43,3 +49,20 @@ services:
       interval: 5s
       timeout: 2s
       retries: 2
+      
+  runner:
+    image: gitea/act_runner:latest
+    environment:
+      CONFIG_FILE: /config.yaml
+      GITEA_INSTANCE_URL: "${INSTANCE_URL}"
+      GITEA_RUNNER_REGISTRATION_TOKEN: "${REGISTRATION_TOKEN}"
+      GITEA_RUNNER_NAME: "${RUNNER_NAME}"
+      GITEA_RUNNER_LABELS: "${RUNNER_LABELS}"
+    restart: always
+    depends_on:
+      server:
+        condition: service_healthy
+    volumes:
+      - ./runner/config.yaml:/config.yaml
+      - ./runner/data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
