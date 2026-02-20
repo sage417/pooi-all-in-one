@@ -1,5 +1,7 @@
 use std::vec;
 
+mod main_darts;
+
 fn main() {
     println!("Hello, world!");
 }
@@ -8,18 +10,6 @@ pub struct DoubleArrayTrie {
     base: Vec<isize>,
     check: Vec<isize>,
     size: usize,
-    // use for build
-    value: Option<Vec<isize>>,
-    length: Option<Vec<usize>>,
-    used: Vec<bool>,
-    next_check_pos: usize,
-}
-
-struct Node {
-    code: usize,
-    depth: usize,
-    left: usize,
-    right: usize,
 }
 
 impl DoubleArrayTrie {
@@ -28,12 +18,6 @@ impl DoubleArrayTrie {
             base: vec![0; 1024],
             check: vec![-1; 1024],
             size: 0,
-
-            // keys: vec![],
-            value: Option::None,
-            length: Option::None,
-            used: vec![],
-            next_check_pos: 0,
         };
         trie.base[1] = 1;
         trie.check[0] = -1;
@@ -45,7 +29,6 @@ impl DoubleArrayTrie {
             let new_size = std::cmp::max(needed_pos + 1, self.base.len() * 2);
             self.base.resize(new_size, 0);
             self.check.resize(new_size, -1);
-            self.used.resize(new_size, false);
         }
     }
 
@@ -67,61 +50,6 @@ impl DoubleArrayTrie {
             return false;
         }
         self.base[pos] < 0
-    }
-
-    fn fetch(&self, parent: &Node, siblings: &mut Vec<Node>, keys: &Vec<String>) -> usize {
-        let mut prev_cur = 0;
-        let mut i = parent.left;
-
-        while i < parent.right {
-            let key = keys.get(i).unwrap();
-
-            let key_len = match &self.length {
-                Some(len_arr) => len_arr[i],
-                None => key.chars().count(),
-            };
-
-            // let key_len = self.length.as_ref().map(|len_arr| len_arr[i])
-            // .unwrap_or_else(|| tmp.chars().count());
-
-            if key_len < parent.depth {
-                continue;
-            }
-
-            let mut cur = 0;
-            if parent.depth != key_len {
-                if let Some(c) = key.chars().nth(parent.depth) {
-                    cur = c as usize + 1
-                }
-            }
-
-            if prev_cur > cur {
-                return 0;
-            }
-
-            if cur != prev_cur || siblings.is_empty() {
-                let tmp_node = Node {
-                    code: cur,
-                    depth: parent.depth + 1,
-                    left: i,
-                    right: 0,
-                };
-
-                if let Some(last_node) = siblings.last_mut() {
-                    last_node.right = i;
-                }
-                siblings.push(tmp_node);
-            }
-
-            prev_cur = cur;
-            i += 1;
-        }
-
-        if let Some(last_node) = siblings.last_mut() {
-            last_node.right = parent.right;
-        }
-
-        return siblings.len();
     }
 
     fn find_available_base(&mut self, children: &[isize]) -> isize {
@@ -181,106 +109,6 @@ impl DoubleArrayTrie {
         }
         self.set_terminal(pos);
         self.size += 1;
-    }
-
-    pub fn build(&mut self, keys: &Vec<String>) {
-        self._build(keys, keys.len());
-    }
-
-    fn _build(&mut self, keys: &Vec<String>, key_size: usize) {
-        if keys.is_empty() {
-            return;
-        }
-
-        self.base[0] = 1;
-        self.next_check_pos = 0;
-
-        let root_node = Node {
-            code: 0,
-            depth: 0,
-            left: 0,
-            right: key_size,
-        };
-
-        let mut siblings = vec![];
-        self.fetch(&root_node, &mut siblings, keys);
-        self.build_insert(siblings, keys);
-
-        // clean used
-        self.used = Vec::new();
-        return;
-    }
-
-    fn build_insert(&mut self, siblings: Vec<Node>, keys: &Vec<String>) -> usize {
-        let mut begin = 0;
-        let mut pos = if siblings.first().unwrap().code + 1 > self.next_check_pos {
-            siblings.first().unwrap().code + 1
-        } else {
-            self.next_check_pos
-        } - 1;
-        let mut nonzero_num = 0u32;
-        let mut first = true;
-
-        self.expand(pos + 1);
-
-        'outer: loop {
-            pos += 1;
-            self.expand(pos + 1);
-
-            if self.check[pos] != 0 {
-                nonzero_num += 1;
-                continue;
-            } else if first {
-                self.next_check_pos = pos;
-                first = false;
-            }
-
-            begin = pos - siblings.first().unwrap().code;
-
-            if self.used[begin] {
-                continue;
-            }
-
-            for node in &siblings {
-                if self.check[begin + node.code] != 0 {
-                    continue 'outer;
-                }
-            }
-
-            break;
-        }
-
-        if 1.0f32 * nonzero_num as f32 / (pos - self.next_check_pos + 1) as f32 > 0.95f32 {
-            self.next_check_pos = pos;
-        }
-
-        self.used[begin] = true;
-
-        self.size = if self.size > begin + siblings.last().unwrap().code + 1 {
-            self.size
-        } else {
-            begin + siblings.last().unwrap().code + 1
-        };
-
-        for node in &siblings {
-            self.check[begin + node.code] = begin as isize;
-        }
-
-        for node in &siblings {
-            let mut new_siblings = vec![];
-            if self.fetch(node, &mut new_siblings, keys) == 0 {
-                self.base[begin + node.code] = self
-                    .value
-                    .as_ref()
-                    .map(|value_arr| -value_arr[node.left] - 1)
-                    .unwrap_or_else(|| -(node.left as isize) - 1);
-            } else {
-                let h = self.build_insert(new_siblings, keys);
-                self.base[begin + node.code as usize] = h as isize;
-            }
-        }
-
-        begin
     }
 
     fn resolve_collision(&mut self, pos: usize, code: isize) {
@@ -402,14 +230,5 @@ mod tests {
         assert_eq!(dat.get_index("app"), Some(1));
         assert_eq!(dat.get_index("orange"), Some(1));
 
-        let keys = vec![
-            "apple".to_string(),
-            "app".to_string(),
-            "banana".to_string(),
-            "band".to_string(),
-            "orange".to_string(),
-        ];
-        dat = DoubleArrayTrie::new();
-        // dat.build(&keys);
     }
 }
