@@ -1,4 +1,4 @@
-use std::{  vec};
+use std::vec;
 
 fn main() {
     println!("Hello, world!");
@@ -16,7 +16,7 @@ pub struct DoubleArrayTrie {
 }
 
 struct Node {
-    code: isize,
+    code: usize,
     depth: usize,
     left: usize,
     right: usize,
@@ -69,33 +69,37 @@ impl DoubleArrayTrie {
         self.base[pos] < 0
     }
 
-    fn fetch(&self, parent: &Node, siblings: &mut Vec<Node>, keys:&Vec<String>) -> usize {
-        let mut prev = 0;
+    fn fetch(&self, parent: &Node, siblings: &mut Vec<Node>, keys: &Vec<String>) -> usize {
+        let mut prev_cur = 0;
         let mut i = parent.left;
 
         while i < parent.right {
-            let tmp = keys.get(i).unwrap();
-            let mut cur = 0;
+            let key = keys.get(i).unwrap();
 
             let key_len = match &self.length {
                 Some(len_arr) => len_arr[i],
-                None => tmp.chars().count()
+                None => key.chars().count(),
             };
 
             // let key_len = self.length.as_ref().map(|len_arr| len_arr[i])
             // .unwrap_or_else(|| tmp.chars().count());
 
+            if key_len < parent.depth {
+                continue;
+            }
+
+            let mut cur = 0;
             if parent.depth != key_len {
-                if let Some(c) = tmp.chars().nth(parent.depth) {
-                    cur = c as isize + 1
+                if let Some(c) = key.chars().nth(parent.depth) {
+                    cur = c as usize + 1
                 }
             }
 
-            if prev > cur {
+            if prev_cur > cur {
                 return 0;
             }
 
-            if cur != prev || siblings.is_empty() {
+            if cur != prev_cur || siblings.is_empty() {
                 let tmp_node = Node {
                     code: cur,
                     depth: parent.depth + 1,
@@ -109,7 +113,7 @@ impl DoubleArrayTrie {
                 siblings.push(tmp_node);
             }
 
-            prev = cur;
+            prev_cur = cur;
             i += 1;
         }
 
@@ -179,7 +183,7 @@ impl DoubleArrayTrie {
         self.size += 1;
     }
 
-    fn build(&mut self, keys: &Vec<String>) {
+    pub fn build(&mut self, keys: &Vec<String>) {
         self._build(keys, keys.len());
     }
 
@@ -207,10 +211,10 @@ impl DoubleArrayTrie {
         return;
     }
 
-    fn build_insert(&mut self, siblings: Vec<Node>, keys:&Vec<String>) -> usize {
+    fn build_insert(&mut self, siblings: Vec<Node>, keys: &Vec<String>) -> usize {
         let mut begin = 0;
-        let mut pos = if siblings.first().unwrap().code as usize + 1 > self.next_check_pos {
-            siblings.first().unwrap().code as usize + 1
+        let mut pos = if siblings.first().unwrap().code + 1 > self.next_check_pos {
+            siblings.first().unwrap().code + 1
         } else {
             self.next_check_pos
         } - 1;
@@ -231,14 +235,14 @@ impl DoubleArrayTrie {
                 first = false;
             }
 
-            begin = pos - siblings.first().unwrap().code as usize;
+            begin = pos - siblings.first().unwrap().code;
 
             if self.used[begin] {
                 continue;
             }
 
             for node in &siblings {
-                if self.check[begin + node.code as usize] !=0 {
+                if self.check[begin + node.code] != 0 {
                     continue 'outer;
                 }
             }
@@ -246,28 +250,30 @@ impl DoubleArrayTrie {
             break;
         }
 
-        if 1.0f32 * nonzero_num as f32 / (pos - self.next_check_pos + 1) as f32> 0.95f32 {
+        if 1.0f32 * nonzero_num as f32 / (pos - self.next_check_pos + 1) as f32 > 0.95f32 {
             self.next_check_pos = pos;
         }
 
         self.used[begin] = true;
 
-        self.size = if self.size > begin + siblings.last().unwrap().code as usize + 1 {
+        self.size = if self.size > begin + siblings.last().unwrap().code + 1 {
             self.size
         } else {
-            begin + siblings.last().unwrap().code as usize + 1
+            begin + siblings.last().unwrap().code + 1
         };
 
         for node in &siblings {
-            self.check[begin + node.code as usize] = begin as isize;
+            self.check[begin + node.code] = begin as isize;
         }
 
         for node in &siblings {
             let mut new_siblings = vec![];
             if self.fetch(node, &mut new_siblings, keys) == 0 {
-                
-                self.base[begin+node.code as usize] = self.value.as_ref().map(|value_arr| -value_arr[node.left] -1)
-                .unwrap_or_else(|| -(node.left as isize) -1);
+                self.base[begin + node.code] = self
+                    .value
+                    .as_ref()
+                    .map(|value_arr| -value_arr[node.left] - 1)
+                    .unwrap_or_else(|| -(node.left as isize) - 1);
             } else {
                 let h = self.build_insert(new_siblings, keys);
                 self.base[begin + node.code as usize] = h as isize;
@@ -357,7 +363,6 @@ impl DoubleArrayTrie {
             current_pos = next_pos;
         }
 
-        // 检查是否是结束节点（base为负数）
         if self.is_terminal(current_pos) {
             Some(-self.base[current_pos] as usize)
         } else {
@@ -376,11 +381,10 @@ mod tests {
 
     #[test]
     fn test_double_array_trie() {
-        let words = &["apple", "app", "banana", "band", "orange"];
+        let words = ["apple", "app", "banana", "band", "orange"];
         let mut dat = DoubleArrayTrie::new();
 
-        // assert!(dat.build(words).is_ok());
-        for &w in words {
+        for w in words {
             dat.insert(w);
         }
         assert_eq!(dat.count(), 5);
@@ -397,5 +401,15 @@ mod tests {
 
         assert_eq!(dat.get_index("app"), Some(1));
         assert_eq!(dat.get_index("orange"), Some(1));
+
+        let keys = vec![
+            "apple".to_string(),
+            "app".to_string(),
+            "banana".to_string(),
+            "band".to_string(),
+            "orange".to_string(),
+        ];
+        dat = DoubleArrayTrie::new();
+        // dat.build(&keys);
     }
 }
