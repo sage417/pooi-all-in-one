@@ -54,7 +54,7 @@ impl DoubleArrayTrie {
     fn fetch(&self, parent: &Node, siblings: &mut Vec<Node>, keys: &Vec<String>) -> usize {
         let mut prev = 0;
         let mut i = parent.left;
-        println!("fetch parent {:?}", parent);
+
         while i < parent.right {
             let key = keys.get(i).unwrap();
 
@@ -67,7 +67,6 @@ impl DoubleArrayTrie {
             // .unwrap_or_else(|| tmp.chars().count());
 
             if key_len < parent.depth {
-                // println!("fetch key_len {} depth {}", key_len , parent.depth);
                 break;
             }
 
@@ -104,9 +103,7 @@ impl DoubleArrayTrie {
         if let Some(last_node) = siblings.last_mut() {
             last_node.right = parent.right;
         }
-        for s in siblings.iter().as_ref() {
-            println!("add siblings {:?}", s);
-        }
+
         return siblings.len();
     }
 
@@ -140,11 +137,6 @@ impl DoubleArrayTrie {
 
     fn build_insert(&mut self, siblings: Vec<Node>, keys: &Vec<String>) -> usize {
         let mut pos = std::cmp::max(siblings.first().unwrap().code + 1, self.next_check_pos) - 1;
-        println!(
-            "code {} next_check_pos {}",
-            siblings.first().unwrap().code + 1,
-            self.next_check_pos
-        );
         let mut begin = 0;
         let mut nonzero_num = 0;
         let mut first = 0;
@@ -165,7 +157,7 @@ impl DoubleArrayTrie {
 
             // assert_eq!(begin, pos - siblings.first().unwrap().code);
             begin = pos - siblings.first().unwrap().code;
-            println!("begin {pos} {}", siblings.first().unwrap().code);
+
             if self.used[begin] {
                 continue;
             }
@@ -186,11 +178,9 @@ impl DoubleArrayTrie {
         self.used[begin] = true;
 
         self.size = std::cmp::max(self.size, begin + siblings.last().unwrap().code + 1);
-        println!("size: {}", self.size);
 
         for node in &siblings {
             self.check[begin + node.code] = begin as isize;
-            println!("write check[{}] {}", begin + node.code, begin);
         }
 
         for node in &siblings {
@@ -201,11 +191,6 @@ impl DoubleArrayTrie {
                     Some(value_arr) => -value_arr[node.left] - 1,
                     None => -(node.left as isize) - 1,
                 };
-                println!(
-                    "write base[{}] {}",
-                    begin + node.code,
-                    -(node.left as isize) - 1
-                );
 
                 // self.base[begin + node.code] = self
                 //     .value
@@ -222,7 +207,6 @@ impl DoubleArrayTrie {
             } else {
                 let h = self.build_insert(new_siblings, keys);
                 self.base[begin + node.code] = h as isize;
-                println!("write base[{}] {}", begin + node.code, h);
             }
         }
 
@@ -282,8 +266,8 @@ mod tests {
         assert!(dat.exact_match("orange").is_some());
         assert!(dat.exact_match("band").is_some());
 
-        assert!(!dat.exact_match("appl").is_some());
-        assert!(!dat.exact_match("ban").is_some());
-        assert!(!dat.exact_match("grape").is_some());
+        assert!(dat.exact_match("appl").is_none());
+        assert!(dat.exact_match("ban").is_none());
+        assert!(dat.exact_match("grape").is_none());
     }
 }
