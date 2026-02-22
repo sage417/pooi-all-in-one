@@ -1,0 +1,40 @@
+version: "3.9"
+
+networks:
+  devops-test:
+    external: true
+
+services:
+  redis:
+    image: redis:7.2-bookworm
+#    environment:
+    command: redis-server /etc/redis/redis.conf
+    ports:
+      - '6379:6379'
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - '/volume3/docker/devops-test/redis/data:/data'
+      - '/volume3/docker/devops-test/redis/logs:/var/log/redis'
+      - '/volume3/docker/devops-test/redis/redis.conf:/etc/redis/redis.conf'
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+    networks:
+      - devops-test
+    restart: unless-stopped
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.81.0-alpine
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+      # - REDIS_PASSWORD=your_redis_password
+#    ports:
+#      - '9121:9121'
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - devops-test
+    restart: unless-stopped

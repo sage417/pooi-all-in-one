@@ -16,7 +16,7 @@
 #
 
 global:
-  scrape_interval: 5s     # By default, scrape targets every 15 seconds.
+  scrape_interval: 15s     # By default, scrape targets every 15 seconds.
 
   # Attach these labels to any time series or alerts when communicating with
   # external systems (federation, remote storage, Alertmanager).
@@ -30,16 +30,20 @@ scrape_configs:
   # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
   - job_name: "prometheus"
     # Override the global default and scrape targets from this job every 5 seconds.
-    scrape_interval: 5s
+    scrape_interval: 15s
     static_configs:
       - targets: ["localhost:9090"]
+  - job_name: "redis"
+    scrape_interval: 15s
+    static_configs:
+      - targets: ["redis-exporter:9121"]
   - job_name: "apisix"
-    scrape_interval: 5s
+    scrape_interval: 15s
     metrics_path: "/apisix/prometheus/metrics"
     static_configs:
       - targets: ["apisix:9091"]
   - job_name: "keycloak-base-metrics"
-    scrape_interval: 5s
+    scrape_interval: 15s
     metrics_path: "/metrics"
     static_configs:
       - targets: ["keycloak:9000"]
@@ -49,12 +53,12 @@ scrape_configs:
         target_label: __name__
         replacement: 'keycloak_${1}'
   - job_name: "keycloak-realms-metrics"
-    scrape_interval: 5s
+    scrape_interval: 15s
     metrics_path: "/realms/master/metrics"
     static_configs:
       - targets: ["keycloak:8080"]
   - job_name: "prometheus_node_exporter"
-    scrape_interval: 5s
+    scrape_interval: 15s
     consul_sd_configs:
       - server: 'consul:8500'    # Consul地址
         services: ['consul']  # 发现所有注册的 Consul 服务实例
@@ -66,7 +70,7 @@ scrape_configs:
         target_label: __address__
         replacement: '${1}:8500'  # 根据实际端口调整
   - job_name: 'consul-spring-boot'
-    scrape_interval: 5s
+    scrape_interval: 15s
     consul_sd_configs:
       - server: 'consul:8500'    # Consul地址
         services: []  # 匹配的服务名称
