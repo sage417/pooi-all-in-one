@@ -23,7 +23,7 @@
         <spring-cloud.version>2021.0.9</spring-cloud.version>
         <spring-boot.redission.version>3.52.0</spring-boot.redission.version>
         <skywalking-java-agent.version>9.5.0</skywalking-java-agent.version>
-        <dynamicTp.version>1.2.2</dynamicTp.version>
+        <dynamicTp.version>1.2.2-x</dynamicTp.version>
     </properties>
     <dependencies>
 
