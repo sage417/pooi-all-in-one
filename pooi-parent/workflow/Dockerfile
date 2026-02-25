@@ -2,7 +2,7 @@ FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
-COPY target/package.jar /app/app.jar
+COPY package.jar /app/app.jar
 
 EXPOSE 8080
 

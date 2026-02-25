@@ -7,11 +7,14 @@ jobs:
     runs-on: ubuntu-22.04
     # container:  # Specifies the container to run the job inside
     #   image: catthehacker/ubuntu:act-latest  # The Docker image to use as the container
-    # strategy:  # Strategy for the job execution
-    #   matrix:  # Allows running jobs with different variations
-    #     arch: [amd64]
+    strategy:  # Strategy for the job execution
+      matrix:  # Allows running jobs with different variations
+        arch: [amd64]
     env:
       DOCKER_API_VERSION: 1.43
+      BUILD_DIR: ${{ gitea.workspace }}/pooi-parent
+      DOCKER_CONTEXT_DIR: ${{ env.BUILD_DIR }}/docker-context
+      DOCKER_FILE_PATH: ${{env.BUILD_DIR}}/workflow/Dockerfile
     steps:
       - run: echo "🎉 The job was automatically triggered by a ${{ gitea.event_name }} event."
       - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by Gitea!"
@@ -40,43 +43,59 @@ jobs:
           java-version: '21'
           architecture: x64
           cache: 'maven'
-          cache-dependency-path: 'pooi-parent/pom.xml' # optional
+          cache-dependency-path: ${{ env.BUILD_DIR }}/pom.xml # optional
+      - run: chmod +x "${BUILD_DIR}/mvnw"
       - name: Build Spring Boot jar package
         run: |
-          cd ${{ gitea.workspace }}/pooi-parent
-          ./mvnw clean package -DskipTests -pl workflow -am
+          cd ${BUILD_DIR}
+          ./mvnw clean package -T 1C -DskipTests -pl workflow -am
       - name: Find build jar
+        id: find_jar
         run: |
-          JAR_PATH=$(find ./ -name "package.jar" -path "*/target/*")
-            if [ -z "$JAR_PATH" ]; then
+          PACKAGE_PATH=$(find ${BUILD_DIR} -name "package.jar" -path "*/target/*")
+            if [ -z "$PACKAGE_PATH" ]; then
               echo "❌ 未找到编译后的 JAR 包"
               exit 1
             fi
-            echo "✅ 编译成功 JAR 包路径：$JAR_PATH"
+            echo "PACKAGE_PATH=$PACKAGE_PATH" >> $GITHUB_OUTPUT
+            echo "✅ 编译成功 JAR 包路径：$PACKAGE_PATH"
+      - name: Prepare Docker build context
+        run: |
+          mkdir -p ${DOCKER_CONTEXT_DIR}
+          cp ${{ steps.find_jar.outputs.PACKAGE_PATH }} ${DOCKER_CONTEXT_DIR}/
+
+          if [ -f ${DOCKER_FILE_PATH} ]; then
+            cp ${DOCKER_FILE_PATH} ${DOCKER_CONTEXT_DIR}/
+            echo "✅ 复制 Dockerfile 到 Docker 上下文目录"
+          else
+            echo "❌ 未找到 Dockerfile（路径：${DOCKER_FILE_PATH}）"
+            exit 1
+          fi
+          
+          echo "List files in the DOCKER_CONTEXT_DIR"
+          ls -la ${DOCKER_CONTEXT_DIR}
       - name: Login to Container Registry
         uses: docker/login-action@v3  # Uses an action to perform the login
         with:  # Inputs to the login-action
-          registry: ${{ vars.registry_url }} # Specifies the registry to log in to. You can set a variable or just hardcode this value.
+          registry: https://gitea.pooi.app # Specifies the registry to log in to. You can set a variable or just hardcode this value.
           username: ${{ secrets.REGISTRY_USERNAME }}  # Docker Hub username from secrets
           password: ${{ secrets.REGISTRY_TOKEN }}  # Docker Hub token/password from secrets
-      # - name: Set up Docker Buildx  # Step to set up Docker Buildx
-      #   uses: docker/setup-buildx-action@v2.10.0  # Uses an action to set up Buildx
-      # - name: Get base image digest  # Step to get the digest of the base image
-      #   id: base-image-digest  # Sets an ID for this step to refer to its outputs
-      #   run: echo "::set-output name=digest::$(docker pull ubuntu:20.04 | grep -Eo 'sha256:[a-f0-9]+' | cut -d ':' -f 2)"  # Pulls base image and extracts digest
+      - name: Set up Docker Buildx  # Step to set up Docker Buildx
+        uses: docker/setup-buildx-action@v3  # Uses an action to set up Buildx
+      - name: Get base image digest  # Step to get the digest of the base image
+        id: base-image-digest  # Sets an ID for this step to refer to its outputs
+        run: echo "::set-output name=digest::$(docker pull docker.gitea.com/runner-images:ubuntu-22.04 | grep -Eo 'sha256:[a-f0-9]+' | cut -d ':' -f 2)"  # Pulls base image and extracts digest
       - name: Get current date and time  # Step to get the current date and time
         id: current-date-time  # Sets an ID for this step to refer to its outputs
         run: echo "::set-output name=rfc3339::$(date -u +'%Y-%m-%dT%H:%M:%SZ')"  # Gets current date/time in RFC 3339 format
-      # - name: Build Docker image  # Step to build and push the Docker image
-      #   uses: docker/build-push-action@v4.2.1  # Uses an action to build and push Docker images
-      #   with:  # Inputs to the build-push-action
-      #     context: .  # Specifies the build context
-      #     push: true  # Enables pushing the built image to a registry
-      #     tags: ${{ vars.registry_url }}Pooi/workflow-core:latest  # You can set a variable or just hardcode the tag depending on your needs.
-      #     platforms: linux/amd64  # Specifies the target platforms for the image
-      #     build-args: |  # Specifies build arguments
-      #       TARGETARCH=${{ matrix.arch }}  # Sets the TARGETARCH build argument
-      #       BASE_IMAGE_DIGEST=${{ steps.base-image-digest.outputs.digest }}  # Sets the BASE_IMAGE_DIGEST build argument
-      #       IMAGE_CREATED=${{ steps.current-date-time.outputs.rfc3339 }}  # Sets the IMAGE_CREATED build argument
-
-            
+      - name: Build Docker image  # Step to build and push the Docker image
+        uses: docker/build-push-action@v6  # Uses an action to build and push Docker images
+        with:  # Inputs to the build-push-action
+          context: ${{ env.DOCKER_CONTEXT_DIR }}  # Specifies the build context
+          push: true  # Enables pushing the built image to a registry
+          tags: gitea.pooi.app/pooi/workflow-core:latest  # You can set a variable or just hardcode the tag depending on your needs.
+          platforms: linux/amd64  # Specifies the target platforms for the image
+          build-args: |  # Specifies build arguments
+            TARGETARCH=${{ matrix.arch }}  # Sets the TARGETARCH build argument
+            BASE_IMAGE_DIGEST=${{ steps.base-image-digest.outputs.digest }}  # Sets the BASE_IMAGE_DIGEST build argument
+            IMAGE_CREATED=${{ steps.current-date-time.outputs.rfc3339 }}  # Sets the IMAGE_CREATED build argument
