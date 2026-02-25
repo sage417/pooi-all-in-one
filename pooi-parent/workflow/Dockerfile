@@ -1,31 +1,14 @@
-FROM maven:3.8-openjdk-17-slim AS deps
+FROM eclipse-temurin:21-jre-alpine
 
-WORKDIR /opt/app
+WORKDIR /app
 
-COPY workflow/settings.xml /root/.m2/settings.xml
+COPY target/package.jar /app/app.jar
 
-COPY pom.xml .
-COPY common/pom.xml common/pom.xml
-COPY model/pom.xml model/pom.xml
-COPY workflow/pom.xml workflow/pom.xml
+EXPOSE 8080
 
-RUN mvn -B -q dependency:go-offline
+ENV JAVA_OPTS="-Xmx2048m -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai -Dserver.port=8080"
 
-FROM maven:3.8-openjdk-17-slim AS build
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]
 
-WORKDIR /code
-
-RUN mkdir -p /root/.m2
-
-COPY --from=deps /root/.m2 /root/.m2
-
-COPY --from=deps /opt/app/ .
-COPY common/src common/src
-COPY model/src model/src
-COPY workflow/src workflow/src
-
-RUN mvn -B -e -q -DskipTests=true package -pl workflow -am
-
-FROM openjdk:17-slim-buster
-COPY --from=build /code/workflow/target/package.jar /package.jar
-CMD ["java", "-jar", "/package.jar"]
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+  CMD wget -q -O - http://localhost:8080/actuator/health || exit 1
