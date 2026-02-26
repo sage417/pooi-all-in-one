@@ -13,10 +13,10 @@ spring.datasource.dynamic:
       password:
       init:
         schema: classpath*:sql/tenant_ddl.sql
-        data: classpath*:sql/tenant_dml.sql
+        data: classpath*:sql/h2_tenant_dml.sql
 
 # redis
-spring.redis:
+spring.data.redis:
   host: redis.pooi.app
   port: 6379
 
@@ -60,3 +60,10 @@ flowable:
 mybatis-plus:
   configuration:
     log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+
+keycloak:
+  server-url: https://keycloak.pooi.app
+  realm: pooi
+  client-id: workflow_app
+  client-secret:
+  grant-type: client_credentials

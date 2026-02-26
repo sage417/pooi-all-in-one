@@ -2,11 +2,8 @@ package app.pooi.workflow.application.service;
 
 import app.pooi.tenant.multitenancy.ApplicationInfoHolder;
 import groovy.util.logging.Slf4j;
-import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.repository.Deployment;
-import org.flowable.ui.modeler.domain.Model;
-import org.flowable.ui.modeler.serviceapi.ModelService;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
@@ -18,8 +15,8 @@ public class ProcessDefinitionDeployAppService {
     @Resource
     private RepositoryService repositoryService;
 
-    @Resource
-    private ModelService modelService;
+//    @Resource
+//    private ModelService modelService;
 
     @Resource
     private ApplicationInfoHolder applicationInfoHolder;
@@ -36,8 +33,8 @@ public class ProcessDefinitionDeployAppService {
     public void deployModel(String modelId, String key, String name) {
 
         // model (json) -> bpmn model
-        Model model = modelService.getModel(modelId);
-        BpmnModel bpmnModel = modelService.getBpmnModel(model);
+//        Model model = modelService.getModel(modelId);
+//        BpmnModel bpmnModel = modelService.getBpmnModel(model);
         // xml -> bpmn model
 //        bpmnXMLConverter.convertToBpmnModel();
 
@@ -45,7 +42,7 @@ public class ProcessDefinitionDeployAppService {
                 .key(key)
                 .name(name)
                 .tenantId(applicationInfoHolder.getApplicationCode())
-                .addBpmnModel(key + ".bpmn20.xml", bpmnModel)
+                .addBpmnModel(key + ".bpmn20.xml", null)
                 .deploy();
     }
 }

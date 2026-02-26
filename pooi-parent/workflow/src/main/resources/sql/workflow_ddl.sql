@@ -111,6 +111,4 @@ values ('app1', 'grpc', '{
 TRUNCATE TABLE t_workflow_task_agency_profile;
 
 insert into t_workflow_task_agency_profile (tenant_id, type, delegator, delegatee)
-values ('app1', 1, 'a', '[
-  "b"
-]');
+values ('app1', 1, 'a', JSON_ARRAY('b'));

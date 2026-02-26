@@ -17,7 +17,7 @@
     <properties>
         <protobuf.version>3.23.4</protobuf.version>
         <protobuf-plugin.version>0.6.1</protobuf-plugin.version>
-        <grpc.version>1.58.1</grpc.version>
+        <grpc.version>1.63.0</grpc.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 

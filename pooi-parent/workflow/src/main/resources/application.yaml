@@ -16,7 +16,7 @@ spring.datasource.dynamic:
         data: classpath*:sql/tenant_dml.sql
 
 # redis
-spring.redis:
+spring.data.redis:
   host: redis.pooi.app
   port: 6379
 

@@ -3,9 +3,10 @@ package app.pooi.workflow.interfaces.exceptionhandler;
 import app.pooi.basic.expection.BusinessException;
 import app.pooi.basic.rest.CommonResult;
 import app.pooi.basic.rest.resp.ValidationFieldError;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.context.MessageSource;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -15,7 +16,6 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import javax.annotation.Resource;
-import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
@@ -49,7 +49,7 @@ public class MvcExceptionHandler extends ResponseEntityExceptionHandler {
 
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException ex,
-                                                                  HttpHeaders headers, HttpStatus status,
+                                                                  HttpHeaders headers, HttpStatusCode status,
                                                                   WebRequest request) {
         String path = "";
         if (request instanceof ServletWebRequest servletWebRequest) {

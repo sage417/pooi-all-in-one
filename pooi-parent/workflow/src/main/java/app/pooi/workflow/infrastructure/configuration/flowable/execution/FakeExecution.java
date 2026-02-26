@@ -5,6 +5,7 @@ import org.flowable.engine.delegate.ReadOnlyDelegateExecution;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 public class FakeExecution implements ReadOnlyDelegateExecution {
 
@@ -118,5 +119,10 @@ public class FakeExecution implements ReadOnlyDelegateExecution {
     @Override
     public String getTenantId() {
         return "";
+    }
+
+    @Override
+    public Set<String> getVariableNames() {
+        return this.variables.keySet();
     }
 }

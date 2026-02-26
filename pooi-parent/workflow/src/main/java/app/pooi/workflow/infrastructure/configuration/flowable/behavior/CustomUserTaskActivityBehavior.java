@@ -136,6 +136,10 @@ public class CustomUserTaskActivityBehavior extends UserTaskActivityBehavior {
             activeTaskIdVariableName = userTask.getTaskIdVariableName();
         }
 
+        if (execution.getCurrentActivityName() != null) {
+            activeTaskName = execution.getCurrentActivityName();
+        }
+
         CreateUserTaskBeforeContext beforeContext = new CreateUserTaskBeforeContext(userTask, execution, activeTaskName, activeTaskDescription, activeTaskDueDate,
                 activeTaskPriority, activeTaskCategory, activeTaskFormKey, activeTaskSkipExpression, activeTaskAssignee, activeTaskOwner,
                 activeTaskCandidateUsers, activeTaskCandidateGroups);
@@ -200,7 +204,7 @@ public class CustomUserTaskActivityBehavior extends UserTaskActivityBehavior {
             // ---------- auto complete ---------- //
             TaskAutoCompleteType autoCompleteType = userTaskAutoCompleteAppService.satisfyAutoCompleteCond(task, (ExecutionEntity) execution, commandContext);
             if (!TaskAutoCompleteType.NO_AUTO_APPROVAL_NEEDED.equals(autoCompleteType)) {
-                TaskHelper.completeTask(task, null, null, null, null, commandContext);
+                TaskHelper.completeTask(task, null, null, null, null, null, commandContext);
                 Comment autoCompleteComment = this.commentService.createFromTask(task, "AUTO_COMPLETE");
 //                autoCompleteComment.setOperationDetail(autoCompleteType.name());
                 this.commentService.cacheComment(autoCompleteComment);

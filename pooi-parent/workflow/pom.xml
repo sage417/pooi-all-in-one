@@ -6,7 +6,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>2.7.18</version>
+        <version>3.5.11</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>app.pooi</groupId>
@@ -18,21 +18,17 @@
         <java.version>21</java.version>
         <guava.version>33.0.0-jre</guava.version>
         <org.mapstruct.version>1.6.3</org.mapstruct.version>
-        <spring-security.version>5.8.16</spring-security.version>
-        <!-- 2021.0.x aka Jubilee	2.6.x, 2.7.x (Starting with 2021.0.3)-->
-        <spring-cloud.version>2021.0.9</spring-cloud.version>
+        <spring-cloud.version>2025.0.1</spring-cloud.version>
         <spring-boot.redission.version>3.52.0</spring-boot.redission.version>
         <skywalking-java-agent.version>9.5.0</skywalking-java-agent.version>
-        <dynamicTp.version>1.2.2</dynamicTp.version>
+        <dynamicTp.version>1.2.2-x</dynamicTp.version>
     </properties>
     <dependencies>
 
         <dependency>
             <groupId>org.keycloak</groupId>
             <artifactId>keycloak-admin-client</artifactId>
-            <!-- last version use rusteasy 4.x -->
-            <version>21.0.2</version>
-            <!--            <version>126.0.8</version>-->
+            <version>26.0.8</version>
         </dependency>
 
         <dependency>
@@ -56,21 +52,83 @@
         <dependency>
             <groupId>net.devh</groupId>
             <artifactId>grpc-spring-boot-starter</artifactId>
-            <version>2.15.0.RELEASE</version>
+            <version>3.1.0.RELEASE</version>
         </dependency>
 
         <!-- flowable -->
         <dependency>
             <groupId>org.flowable</groupId>
             <artifactId>flowable-spring-boot-starter-process</artifactId>
-            <version>6.8.1</version>
+            <version>7.2.0</version>
         </dependency>
 
-        <dependency>
-            <groupId>org.flowable</groupId>
-            <artifactId>flowable-spring-boot-starter-ui-modeler</artifactId>
-            <version>6.8.1</version>
-        </dependency>
+        <!--        <dependency>-->
+        <!--            <groupId>org.flowable</groupId>-->
+        <!--            <artifactId>flowable-ui-modeler-conf</artifactId>-->
+        <!--            <version>6.8.1</version>-->
+        <!--            <exclusions>-->
+        <!--                <exclusion>-->
+        <!--                    <groupId>org.mybatis</groupId>-->
+        <!--                    <artifactId>*</artifactId>-->
+        <!--                </exclusion>-->
+        <!--                <exclusion>-->
+        <!--                    <artifactId>spring-boot-autoconfigure</artifactId>-->
+        <!--                    <groupId>org.springframework.boot</groupId>-->
+        <!--                </exclusion>-->
+        <!--                <exclusion>-->
+        <!--                    <artifactId>flowable-bpmn-model</artifactId>-->
+        <!--                    <groupId>org.flowable</groupId>-->
+        <!--                </exclusion>-->
+        <!--                <exclusion>-->
+        <!--                    <artifactId>flowable-bpmn-converter</artifactId>-->
+        <!--                    <groupId>org.flowable</groupId>-->
+        <!--                </exclusion>-->
+        <!--                <exclusion>-->
+        <!--                    <artifactId>flowable-dmn-model</artifactId>-->
+        <!--                    <groupId>org.flowable</groupId>-->
+        <!--                </exclusion>-->
+        <!--                <exclusion>-->
+        <!--                    <artifactId>flowable-form-model</artifactId>-->
+        <!--                    <groupId>org.flowable</groupId>-->
+        <!--                </exclusion>-->
+        <!--                <exclusion>-->
+        <!--                    <artifactId>flowable-process-validation</artifactId>-->
+        <!--                    <groupId>org.flowable</groupId>-->
+        <!--                </exclusion>-->
+        <!--                <exclusion>-->
+        <!--                    <artifactId>flowable-spring-boot-autoconfigure</artifactId>-->
+        <!--                    <groupId>org.flowable</groupId>-->
+        <!--                </exclusion>-->
+        <!--                <exclusion>-->
+        <!--                    <artifactId>flowable-cmmn-model</artifactId>-->
+        <!--                    <groupId>org.flowable</groupId>-->
+        <!--                </exclusion>-->
+        <!--                <exclusion>-->
+        <!--                    <artifactId>flowable-engine-common-api</artifactId>-->
+        <!--                    <groupId>org.flowable</groupId>-->
+        <!--                </exclusion>-->
+        <!--                <exclusion>-->
+        <!--                    <artifactId>flowable-idm-api</artifactId>-->
+        <!--                    <groupId>org.flowable</groupId>-->
+        <!--                </exclusion>-->
+        <!--                <exclusion>-->
+        <!--                    <artifactId>flowable-image-generator</artifactId>-->
+        <!--                    <groupId>org.flowable</groupId>-->
+        <!--                </exclusion>-->
+        <!--                <exclusion>-->
+        <!--                    <artifactId>flowable-event-registry-json-converter</artifactId>-->
+        <!--                    <groupId>org.flowable</groupId>-->
+        <!--                </exclusion>-->
+        <!--                <exclusion>-->
+        <!--                    <artifactId>flowable-app-engine-api</artifactId>-->
+        <!--                    <groupId>org.flowable</groupId>-->
+        <!--                </exclusion>-->
+        <!--                <exclusion>-->
+        <!--                    <artifactId>flowable-event-registry-model</artifactId>-->
+        <!--                    <groupId>org.flowable</groupId>-->
+        <!--                </exclusion>-->
+        <!--            </exclusions>-->
+        <!--        </dependency>-->
 
         <!--        <dependency>-->
         <!--            <groupId>org.flowable</groupId>-->
@@ -90,26 +148,16 @@
             <groupId>org.redisson</groupId>
             <artifactId>redisson-spring-boot-starter</artifactId>
             <version>${spring-boot.redission.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.redisson</groupId>
-                    <artifactId>redisson-spring-data-35</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
-        <dependency>
-            <groupId>org.redisson</groupId>
-            <artifactId>redisson-spring-data-27</artifactId>
-            <version>${spring-boot.redission.version}</version>
-        </dependency>
+
         <!-- redis end -->
 
         <!-- database -->
 
         <dependency>
             <groupId>com.baomidou</groupId>
-            <artifactId>mybatis-plus-boot-starter</artifactId>
+            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
         </dependency>
 
         <dependency>
@@ -243,7 +291,7 @@
             <dependency>
                 <groupId>com.baomidou</groupId>
                 <artifactId>mybatis-plus-bom</artifactId>
-                <version>3.5.14</version>
+                <version>3.5.16</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -253,16 +301,6 @@
                 <version>${spring-cloud.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
-            </dependency>
-            <dependency>
-                <groupId>org.mybatis</groupId>
-                <artifactId>mybatis</artifactId>
-                <version>3.5.19</version>
-            </dependency>
-            <dependency>
-                <groupId>org.mybatis</groupId>
-                <artifactId>mybatis-spring</artifactId>
-                <version>2.1.2</version>
             </dependency>
             <dependency>
                 <groupId>com.alibaba</groupId>

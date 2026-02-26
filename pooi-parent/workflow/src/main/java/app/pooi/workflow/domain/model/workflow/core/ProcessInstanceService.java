@@ -1,7 +1,7 @@
 package app.pooi.workflow.domain.model.workflow.core;
 
 import app.pooi.basic.expection.BusinessException;
-import org.apache.commons.collections.MapUtils;
+import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;

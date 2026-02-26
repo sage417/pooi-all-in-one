@@ -1,8 +1,7 @@
 package app.pooi.workflow.interfaces.rest.req;
 
+import jakarta.validation.constraints.*;
 import lombok.Data;
-
-import javax.validation.constraints.*;
 
 @Data
 public class QueryUserReq {

@@ -1,6 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <configuration>
+    <springProfile name="swlog">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE"/>
+            <appender-ref ref="SKYWALKING"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="!swlog">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE"/>
+        </root>
+    </springProfile>
+
     <include resource="org/springframework/boot/logging/logback/defaults.xml" />
     <property name="LOG_FILE" value="${LOG_FILE:-${LOG_PATH:-${LOG_TEMP:-${java.io.tmpdir:-/tmp}}}/spring.log}"/>
 
@@ -8,9 +23,7 @@
         <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
             <level>${CONSOLE_LOG_THRESHOLD}</level>
         </filter>
-
         <encoder class="ch.qos.logback.core.encoder.LayoutWrappingEncoder">
-            <!-- https://skywalking.apache.org/docs/skywalking-java/latest/en/setup/service-agent/java-agent/application-toolkit-logback-1.x/ -->
             <layout class="org.apache.skywalking.apm.toolkit.log.logback.v1.x.TraceIdPatternLogbackLayout">
                 <pattern>%clr(%d{${LOG_DATEFORMAT_PATTERN:-yyyy-MM-dd HH:mm:ss.SSS}}){faint} %clr(${LOG_LEVEL_PATTERN:-%5p}) %clr(%tid){green} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}</pattern>
             </layout>
@@ -20,7 +33,6 @@
 
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <encoder class="ch.qos.logback.core.encoder.LayoutWrappingEncoder">
-            <!-- https://skywalking.apache.org/docs/skywalking-java/latest/en/setup/service-agent/java-agent/application-toolkit-logback-1.x/ -->
             <layout class="org.apache.skywalking.apm.toolkit.log.logback.v1.x.TraceIdPatternLogbackLayout">
                 <pattern>%d{${LOG_DATEFORMAT_PATTERN:-yyyy-MM-dd HH:mm:ss.SSS}} ${LOG_LEVEL_PATTERN:-%5p} %tid --- [%t] %-40.40logger{39} : %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}</pattern>
             </layout>
@@ -36,22 +48,13 @@
         </rollingPolicy>
     </appender>
 
-    <springProfile name="swlog">
-        <appender name="SKYWALKING" class="org.apache.skywalking.apm.toolkit.log.logback.v1.x.log.GRPCLogClientAppender">
-            <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
-                <level>ERROR</level>
-            </filter>
-            <encoder>
-                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%X{tid}] [%thread] %-5level %logger{36} -%msg%n</pattern>
-            </encoder>
-        </appender>
-    </springProfile>
-
-    <root level="INFO">
-        <appender-ref ref="CONSOLE" />
-        <appender-ref ref="FILE" />
-        <springProfile name="swlog">
-            <appender-ref ref="SKYWALKING" />
-        </springProfile>
-    </root>
+    <!-- 修改点1：将SKYWALKING appender定义移到外层 -->
+    <appender name="SKYWALKING" class="org.apache.skywalking.apm.toolkit.log.logback.v1.x.log.GRPCLogClientAppender">
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>ERROR</level>
+        </filter>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%X{tid}] [%thread] %-5level %logger{36} -%msg%n</pattern>
+        </encoder>
+    </appender>
 </configuration>
