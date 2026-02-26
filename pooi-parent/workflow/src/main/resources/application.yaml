@@ -64,7 +64,7 @@ management:
       include: prometheus,health
 #  metrics:
 #    tags:
-#      application: ${spring.application.name}
+#      application: ${spring.application.name} impl by app.pooi.basic.metrics.MeterRegistryConfiguration
 
 # flowable
 flowable:

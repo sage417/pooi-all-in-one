@@ -1,1 +1,2 @@
 app.pooi.basic.util.UtilConfiguration
+app.pooi.basic.metrics.MeterRegistryConfiguration
