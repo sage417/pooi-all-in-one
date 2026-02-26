@@ -90,3 +90,10 @@ grpc:
 # logging
 logging.level:
   org.springframework.security: DEBUG
+
+keycloak:
+  server-url: https://keycloak.pooi.app
+  realm: pooi
+  client-id: workflow_app
+  client-secret: 9eWHLiBnx82glZ8XPXou1glaoKuoPvnN
+  grant-type: client_credentials
