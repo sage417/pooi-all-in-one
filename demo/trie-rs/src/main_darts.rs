@@ -213,6 +213,32 @@ impl DoubleArrayTrie {
         begin
     }
 
+    pub fn exact_match_v2(&self, word: &str) -> Option<usize> {
+        // root pos = 0
+        let mut pos = 0;
+        // t = base[p] + c
+        // check[p] = t - c or base[p]
+        for c in word.chars() {
+            let offset = self.base[pos];
+            pos = offset as usize + c as usize + 1;
+            println!("offset {offset} check {}", self.check[pos]);
+            if offset != self.check[pos] {
+                return None
+            }
+        }
+        // next state
+        let offset = self.base[pos];
+        pos = offset as usize;
+        let next_offset = self.base[pos];
+
+        // state valid and is terminal
+        if offset == self.check[pos] && next_offset < 0 {
+            Some((-next_offset - 1) as usize)
+        } else {
+            None
+        }
+    }
+
     pub fn exact_match(&self, word: &str) -> Option<usize> {
         let node_pos = 0;
 
@@ -260,14 +286,14 @@ mod tests {
         dat = DoubleArrayTrie::new();
         dat.build(&keys);
 
-        assert!(dat.exact_match("apple").is_some());
-        assert!(dat.exact_match("app").is_some());
-        assert!(dat.exact_match("banana").is_some());
-        assert!(dat.exact_match("orange").is_some());
-        assert!(dat.exact_match("band").is_some());
+        assert!(dat.exact_match_v2("apple").is_some());
+        assert!(dat.exact_match_v2("app").is_some());
+        assert!(dat.exact_match_v2("banana").is_some());
+        assert!(dat.exact_match_v2("orange").is_some());
+        assert!(dat.exact_match_v2("band").is_some());
 
-        assert!(dat.exact_match("appl").is_none());
-        assert!(dat.exact_match("ban").is_none());
-        assert!(dat.exact_match("grape").is_none());
+        assert!(dat.exact_match_v2("appl").is_none());
+        assert!(dat.exact_match_v2("ban").is_none());
+        assert!(dat.exact_match_v2("grape").is_none());
     }
 }
