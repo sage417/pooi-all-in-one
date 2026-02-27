@@ -1,9 +1,5 @@
 use std::vec;
 
-fn main() {
-    println!("Hello, world!");
-}
-
 pub struct DoubleArrayTrie {
     base: Vec<isize>,
     check: Vec<isize>,
@@ -137,34 +133,33 @@ impl DoubleArrayTrie {
 
     fn build_insert(&mut self, siblings: Vec<Node>, keys: &Vec<String>) -> usize {
         let mut pos = std::cmp::max(siblings.first().unwrap().code + 1, self.next_check_pos) - 1;
-        let mut begin = 0;
+        let mut begin;
         let mut nonzero_num = 0;
-        let mut first = 0;
+        let mut first = true;
 
         self.expand(pos + 1);
 
-        'outer: loop {
+        'find_begin: loop {
             pos += 1;
             self.expand(pos + 1);
 
             if self.check[pos] != 0 {
                 nonzero_num += 1;
                 continue;
-            } else if first == 0 {
+            } else if first {
                 self.next_check_pos = pos;
-                first = 1;
+                first = false;
             }
 
             // assert_eq!(begin, pos - siblings.first().unwrap().code);
             begin = pos - siblings.first().unwrap().code;
-
+            // ensure begin not used and check[node.code] all em
             if self.used[begin] {
                 continue;
             }
-
             for node in &siblings[1..] {
                 if self.check[begin + node.code] != 0 {
-                    continue 'outer;
+                    continue 'find_begin;
                 }
             }
 
@@ -187,16 +182,11 @@ impl DoubleArrayTrie {
             let mut new_siblings = vec![];
 
             if self.fetch(node, &mut new_siblings, keys) == 0 {
+                // leaf node
                 self.base[begin + node.code] = match &self.value {
                     Some(value_arr) => -value_arr[node.left] - 1,
                     None => -(node.left as isize) - 1,
                 };
-
-                // self.base[begin + node.code] = self
-                //     .value
-                //     .as_ref()
-                //     .map(|value_arr| -value_arr[node.left] - 1)
-                //     .unwrap_or_else(|| -(node.left as isize) - 1);
 
                 if let Some(value_arr) = &self.value {
                     if -value_arr[node.left] - 1 >= 0 {
@@ -221,7 +211,7 @@ impl DoubleArrayTrie {
         for c in word.chars() {
             let offset = self.base[pos];
             pos = offset as usize + c as usize + 1;
-            println!("offset {offset} check {}", self.check[pos]);
+
             if offset != self.check[pos] {
                 return None
             }
@@ -286,6 +276,7 @@ mod tests {
         dat = DoubleArrayTrie::new();
         dat.build(&keys);
 
+        // assert_eq!(dat.size, 224);
         assert!(dat.exact_match_v2("apple").is_some());
         assert!(dat.exact_match_v2("app").is_some());
         assert!(dat.exact_match_v2("banana").is_some());
@@ -295,5 +286,96 @@ mod tests {
         assert!(dat.exact_match_v2("appl").is_none());
         assert!(dat.exact_match_v2("ban").is_none());
         assert!(dat.exact_match_v2("grape").is_none());
+    }
+
+    #[test]
+    fn test_single_key() {
+        let mut dat = DoubleArrayTrie::new();
+        let keys = vec!["hello".to_string()];
+        dat.build(&keys);
+
+        assert!(dat.exact_match_v2("hello").is_some());
+        assert!(dat.exact_match_v2("hell").is_none());
+        assert!(dat.exact_match_v2("hello1").is_none());
+    }
+
+    #[test]
+    fn test_single_char() {
+        let mut dat = DoubleArrayTrie::new();
+        let mut keys = vec![
+            "a".to_string(),
+            "b".to_string(),
+            "c".to_string(),
+            "d".to_string(),
+        ];
+        keys.sort();
+        dat.build(&keys);
+
+        assert!(dat.exact_match_v2("a").is_some());
+        assert!(dat.exact_match_v2("b").is_some());
+        assert!(dat.exact_match_v2("c").is_some());
+        assert!(dat.exact_match_v2("d").is_some());
+        assert!(dat.exact_match_v2("e").is_none());
+    }
+
+    #[test]
+    fn test_prefix_keys() {
+        let mut dat = DoubleArrayTrie::new();
+        let mut keys = vec![
+            "a".to_string(),
+            "ab".to_string(),
+            "abc".to_string(),
+            "abcd".to_string(),
+        ];
+        keys.sort();
+        dat.build(&keys);
+
+        assert!(dat.exact_match_v2("a").is_some());
+        assert!(dat.exact_match_v2("ab").is_some());
+        assert!(dat.exact_match_v2("abc").is_some());
+        assert!(dat.exact_match_v2("abcd").is_some());
+
+        assert!(dat.exact_match_v2("").is_none());
+        assert!(dat.exact_match_v2("abcde").is_none());
+    }
+
+    #[test]
+    fn test_no_common_prefix() {
+        let mut dat = DoubleArrayTrie::new();
+        let mut keys = vec![
+            "cat".to_string(),
+            "dog".to_string(),
+            "fish".to_string(),
+            "bird".to_string(),
+        ];
+        keys.sort();
+        dat.build(&keys);
+
+        assert!(dat.exact_match_v2("cat").is_some());
+        assert!(dat.exact_match_v2("dog").is_some());
+        assert!(dat.exact_match_v2("fish").is_some());
+        assert!(dat.exact_match_v2("bird").is_some());
+
+        assert!(dat.exact_match_v2("ca").is_none());
+        assert!(dat.exact_match_v2("do").is_none());
+    }
+
+    #[test]
+    fn test_non_exist() {
+        let mut dat = DoubleArrayTrie::new();
+        let mut keys = vec!["hello".to_string(), "world".to_string()];
+        keys.sort();
+        dat.build(&keys);
+
+        assert!(dat.exact_match_v2("hello").is_some());
+        assert!(dat.exact_match_v2("world").is_some());
+
+        assert!(dat.exact_match_v2("hell").is_none());
+        assert!(dat.exact_match_v2("wor").is_none());
+
+        assert!(dat.exact_match_v2("helloworld").is_none());
+        assert!(dat.exact_match_v2("world123").is_none());
+
+        assert!(dat.exact_match_v2("test").is_none());
     }
 }
