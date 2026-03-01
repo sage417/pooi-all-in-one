@@ -16,4 +16,6 @@ import java.util.List;
 public interface TaskAgencyProfileEntityService extends IService<TaskAgencyProfileEntity> {
 
     List<TaskAgencyProfileEntity> selectValidByProcessDefinitionKeyAndTenantId(String definitionKey, String tenantId);
+
+    int saveTaskAgencyProfile(TaskAgencyProfileEntity entity);
 }

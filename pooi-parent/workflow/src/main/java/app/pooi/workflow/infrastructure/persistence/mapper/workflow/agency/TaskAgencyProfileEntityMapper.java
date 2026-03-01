@@ -11,7 +11,10 @@ package app.pooi.workflow.infrastructure.persistence.mapper.workflow.agency;
 import app.pooi.workflow.infrastructure.persistence.entity.workflow.delegate.TaskAgencyProfileEntity;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 @Mapper
 public interface TaskAgencyProfileEntityMapper extends BaseMapper<TaskAgencyProfileEntity> {
+
+     int insertAgencyProfile(@Param("entity") TaskAgencyProfileEntity entity);
 }

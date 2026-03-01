@@ -27,4 +27,9 @@ public class TaskAgencyProfileServiceImpl extends ServiceImpl<TaskAgencyProfileE
                 .eq(TaskAgencyProfileEntity::getTenantId, tenantId)
                 .gt(TaskAgencyProfileEntity::getType, 0));
     }
+
+    @Override
+    public int saveTaskAgencyProfile(TaskAgencyProfileEntity entity) {
+        return baseMapper.insertAgencyProfile(entity);
+    }
 }

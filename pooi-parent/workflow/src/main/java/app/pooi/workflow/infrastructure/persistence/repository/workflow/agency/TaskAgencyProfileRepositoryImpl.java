@@ -27,6 +27,6 @@ public class TaskAgencyProfileRepositoryImpl implements TaskAgencyProfileReposit
 
     @Override
     public void save(TaskAgencyProfile profile) {
-        approvalDelegateConfigEntityService.save(converter.toEntity(profile));
+        approvalDelegateConfigEntityService.saveTaskAgencyProfile(converter.toEntity(profile));
     }
 }
