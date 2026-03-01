@@ -2,6 +2,7 @@ package app.pooi.workflow.infrastructure;
 
 
 import app.pooi.workflow.TenantInfoHolderExtension;
+import app.pooi.workflow.domain.model.enums.TaskAgencyType;
 import app.pooi.workflow.domain.model.workflow.agency.TaskAgencyProfile;
 import app.pooi.workflow.domain.repository.TaskAgencyProfileRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -27,8 +28,22 @@ public class TaskAgencyProfileRepositoryTest {
 
     @Test
     public void testSelectValidByProcessDefinitionKeyAndTenantId() {
-        List<TaskAgencyProfile> taskAgencyProfiles = taskAgencyProfileRepository.selectValidByProcessDefinitionKeyAndTenantId("", tenantInfoHolder.getCurrentTenantId());
+        String tenantId = tenantInfoHolder.getCurrentTenantId();
+        String delegatee = "delegatee";
+
+        TaskAgencyProfile entity = new TaskAgencyProfile();
+        entity.setProcessDefinitionKey("test");
+        entity.setDelegator("delegator");
+        entity.setTenantId(tenantId);
+        entity.setAgencyType(TaskAgencyType.DELEGATE);
+        entity.setDelegatee(List.of(delegatee));
+        taskAgencyProfileRepository.save(entity);
+
+        List<TaskAgencyProfile> taskAgencyProfiles = taskAgencyProfileRepository.
+                selectValidByProcessDefinitionKeyAndTenantId(delegatee, tenantId);
+
         Assertions.assertThat(taskAgencyProfiles).hasSize(1);
         Assertions.assertThat(taskAgencyProfiles.getFirst().getDelegatee()).hasSize(1);
+        Assertions.assertThat(taskAgencyProfiles.getFirst().getDelegatee()).isEqualTo(delegatee);
     }
 }

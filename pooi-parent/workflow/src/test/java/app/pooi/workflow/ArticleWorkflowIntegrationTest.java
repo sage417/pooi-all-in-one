@@ -67,7 +67,7 @@ class ArticleWorkflowIntegrationTest {
     @Test
     void fairLockTest() {
         RLock fairlock = redissonClient.getFairLock("fair_lock");
-        long tid = RandomUtils.nextLong();
+        long tid = RandomUtils.insecure().randomLong();
         RFuture<Void> rFuture = fairlock.lockAsync(tid);
         rFuture.whenComplete((res, exception) -> {
             assertTrue(fairlock.isHeldByThread(tid));
