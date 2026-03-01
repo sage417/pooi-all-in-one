@@ -75,7 +75,7 @@ impl DoubleArrayTrie {
 
             if prev > cur {
                 // err -3 not sorted asc?
-                return 0;
+                panic!("err -3 not sorted asc");
             }
 
             if cur != prev || siblings.is_empty() {
@@ -191,7 +191,7 @@ impl DoubleArrayTrie {
                 if let Some(value_arr) = &self.value {
                     if -value_arr[node.left] - 1 >= 0 {
                         // err -2 wrong value?
-                        return 0;
+                        panic!("err -2 wrong value");
                     }
                 }
             } else {

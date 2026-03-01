@@ -1,7 +1,5 @@
 use std::vec;
 
-mod main_darts;
-
 fn main() {
     println!("Hello, world!");
 }
