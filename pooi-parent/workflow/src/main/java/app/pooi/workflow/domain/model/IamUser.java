@@ -14,7 +14,7 @@ import java.util.Map;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class IAMUser {
+public class IamUser {
     private String id;
     private String username;
     private String email;

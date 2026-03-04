@@ -1,7 +1,8 @@
 package app.pooi.workflow.infrastructure.repository;
 
 
-import app.pooi.workflow.domain.model.IAMUser;
+import app.pooi.workflow.domain.model.IamUser;
+import app.pooi.workflow.domain.repository.IamUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.BooleanUtils;
 import org.keycloak.admin.client.Keycloak;
@@ -15,15 +16,15 @@ import java.util.stream.Collectors;
 
 @Repository
 @RequiredArgsConstructor
-public class IAMUserRepository implements app.pooi.workflow.domain.repository.IAMUserRepository {
+public class IamUserRepositoryImpl implements IamUserRepository {
 
     private final Keycloak keycloakClient;
 
     @Value("${keycloak.realm}")
     private String realm;
 
-    private IAMUser convertToDomain(UserRepresentation userRepresentation) {
-        return IAMUser.builder()
+    private IamUser convertToDomain(UserRepresentation userRepresentation) {
+        return IamUser.builder()
                 .id(userRepresentation.getId())
                 .username(userRepresentation.getUsername())
                 .email(userRepresentation.getEmail())
@@ -35,7 +36,7 @@ public class IAMUserRepository implements app.pooi.workflow.domain.repository.IA
     }
 
     @Override
-    public Optional<IAMUser> findByUsername(String username) {
+    public Optional<IamUser> findByUsername(String username) {
         List<UserRepresentation> userList = keycloakClient.realm(realm)
                 .users()
                 .search(username);
@@ -45,7 +46,7 @@ public class IAMUserRepository implements app.pooi.workflow.domain.repository.IA
     }
 
     @Override
-    public List<IAMUser> findAll(int first, int max) {
+    public List<IamUser> findAll(int first, int max) {
         return keycloakClient.realm(realm)
                 .users()
                 .list(first, max)
@@ -55,7 +56,7 @@ public class IAMUserRepository implements app.pooi.workflow.domain.repository.IA
     }
 
     @Override
-    public Optional<IAMUser> findById(String userId) {
+    public Optional<IamUser> findById(String userId) {
         try {
             UserRepresentation user = keycloakClient.realm(realm)
                     .users()
