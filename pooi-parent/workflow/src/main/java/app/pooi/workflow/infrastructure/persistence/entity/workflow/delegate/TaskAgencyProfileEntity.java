@@ -41,7 +41,7 @@ public class TaskAgencyProfileEntity implements Serializable {
     private String tenantId;
 
     /**
-     * 流程定义id
+     * 流程定义key
      */
     private String processDefinitionKey;
 

@@ -5,19 +5,18 @@ import app.pooi.workflow.domain.repository.TaskAgencyProfileRepository;
 import app.pooi.workflow.infrastructure.persistence.converter.workflow.agency.TaskAgencyProfileConverter;
 import app.pooi.workflow.infrastructure.persistence.entity.workflow.delegate.TaskAgencyProfileEntity;
 import app.pooi.workflow.infrastructure.persistence.service.workflow.agency.TaskAgencyProfileEntityService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
-import javax.annotation.Resource;
 import java.util.List;
 
 @Repository
+@RequiredArgsConstructor
 public class TaskAgencyProfileRepositoryImpl implements TaskAgencyProfileRepository {
 
-    @Resource
-    private TaskAgencyProfileEntityService approvalDelegateConfigEntityService;
+    private final TaskAgencyProfileEntityService approvalDelegateConfigEntityService;
 
-    @Resource
-    private TaskAgencyProfileConverter converter;
+    private final TaskAgencyProfileConverter converter;
 
     @Override
     public List<TaskAgencyProfile> selectValidByProcessDefinitionKeyAndTenantId(String definitionKey, String tenantId) {

@@ -40,10 +40,10 @@ public class TaskAgencyProfileRepositoryTest {
         taskAgencyProfileRepository.save(entity);
 
         List<TaskAgencyProfile> taskAgencyProfiles = taskAgencyProfileRepository.
-                selectValidByProcessDefinitionKeyAndTenantId(delegatee, tenantId);
+                selectValidByProcessDefinitionKeyAndTenantId("test", tenantId);
 
         Assertions.assertThat(taskAgencyProfiles).hasSize(1);
         Assertions.assertThat(taskAgencyProfiles.getFirst().getDelegatee()).hasSize(1);
-        Assertions.assertThat(taskAgencyProfiles.getFirst().getDelegatee()).isEqualTo(delegatee);
+        Assertions.assertThat(taskAgencyProfiles.getFirst().getDelegatee().getFirst()).isEqualTo(delegatee);
     }
 }

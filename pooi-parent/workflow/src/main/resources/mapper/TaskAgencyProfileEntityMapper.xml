@@ -44,8 +44,7 @@
             , #{entity.onBehalfOf}
         </if>
         <if test="entity.delegatee != null">
-            ,
-            JSON_ARRAY(#{entity.delegatee, typeHandler=com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler})
+            , JSON_ARRAY(<foreach collection="entity.delegatee" item="item" separator=",">#{item}</foreach>)
         </if>
         <if test="entity.validTime != null">
             , #{entity.validTime}

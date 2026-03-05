@@ -99,6 +99,20 @@ CREATE TABLE `t_workflow_task_agency_history`
   AUTO_INCREMENT = 0
   DEFAULT CHARSET = utf8mb4 COMMENT '审批委托记录表';
 
+CREATE TABLE `t_workflow_auto_complete_profile`
+(
+    `id`                     bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+    `tenant_id`              varchar(255)        NOT NULL DEFAULT '' COMMENT '租户标识',
+    `process_definition_key` varchar(255)        NOT NULL DEFAULT '' COMMENT '流程定义id',
+    `type`                   tinyint UNSIGNED    NOT NULL DEFAULT 0 COMMENT '类型',
+    `create_time`            datetime(3)         NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `update_time`            datetime(3)         NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    `is_delete`              tinyint UNSIGNED    NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`)
+) ENGINE = InnoDB
+  AUTO_INCREMENT = 0
+  DEFAULT CHARSET = utf8mb4 COMMENT '审批自动审批配置表';
+
 TRUNCATE TABLE t_workflow_event_push_profile;
 
 insert into t_workflow_event_push_profile (tenant_id, type, profile)
