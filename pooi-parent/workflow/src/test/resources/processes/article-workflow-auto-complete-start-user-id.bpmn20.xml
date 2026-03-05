@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions
+        xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+        xmlns:flowable="http://flowable.org/bpmn"
+        typeLanguage="http://www.w3.org/2001/XMLSchema"
+        expressionLanguage="http://www.w3.org/1999/XPath"
+        targetNamespace="http://www.flowable.org/processdef">
+    <process id="articleReview-autocomplete-start-user-id"
+             name="A simple process for article review." isExecutable="true">
+        <startEvent id="start"/>
+        <sequenceFlow sourceRef="start" targetRef="reviewArticle"/>
+        <userTask id="reviewArticle" name="Review the submitted tutorial"
+                  flowable:assignee="assignee1"/>
+        <sequenceFlow sourceRef="reviewArticle" targetRef="reviewArticle2"/>
+        <userTask id="reviewArticle2" name="Review the submitted tutorial"
+                  flowable:assignee="start_user_id"/>
+        <sequenceFlow sourceRef="reviewArticle2" targetRef="end"/>
+        <endEvent id="end"/>
+    </process>
+</definitions>

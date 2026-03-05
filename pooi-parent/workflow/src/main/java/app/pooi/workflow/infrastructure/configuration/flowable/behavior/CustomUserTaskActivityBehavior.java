@@ -203,10 +203,10 @@ public class CustomUserTaskActivityBehavior extends UserTaskActivityBehavior {
 
             // ---------- auto complete ---------- //
             TaskAutoCompleteType autoCompleteType = userTaskAutoCompleteAppService.satisfyAutoCompleteCond(task, (ExecutionEntity) execution, commandContext);
-            if (!TaskAutoCompleteType.NO_AUTO_APPROVAL_NEEDED.equals(autoCompleteType)) {
+            if (!TaskAutoCompleteType.NOT_SATISFY_AUTO_APPROVAL_COND.equals(autoCompleteType)) {
                 TaskHelper.completeTask(task, null, null, null, null, null, commandContext);
                 Comment autoCompleteComment = this.commentService.createFromTask(task, "AUTO_COMPLETE");
-//                autoCompleteComment.setOperationDetail(autoCompleteType.name());
+                autoCompleteComment.setOperationDetail(autoCompleteType.name());
                 this.commentService.cacheComment(autoCompleteComment);
             }
             // ---------- auto complete ---------- //

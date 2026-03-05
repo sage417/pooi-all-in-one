@@ -1,8 +1,11 @@
 package app.pooi.workflow.application.service;
 
 import app.pooi.workflow.TenantInfoHolderExtension;
+import app.pooi.workflow.domain.model.workflow.comment.Comment;
+import app.pooi.workflow.domain.service.comment.CommentService;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.flowable.common.engine.impl.identity.Authentication;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
 import org.flowable.engine.test.Deployment;
@@ -14,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 import javax.annotation.Resource;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static app.pooi.workflow.TenantInfoHolderExtension.TENANT_APP_1;
@@ -31,6 +35,8 @@ class UserTaskAutoCompleteAppServiceTest {
     @Resource
     private TaskService taskService;
 
+    @Resource
+    private CommentService commentService;
 
     @Test
     @SneakyThrows
@@ -52,6 +58,9 @@ class UserTaskAutoCompleteAppServiceTest {
 
         taskService.complete(task.getId());
         assertEquals(0, runtimeService.createProcessInstanceQuery().count());
+
+        List<Comment> comments = commentService.listByInstanceId(task.getProcessInstanceId());
+        assertEquals("AUTO_COMPLETE", comments.getFirst().getType());
     }
 
     @Test
@@ -75,5 +84,33 @@ class UserTaskAutoCompleteAppServiceTest {
         taskService.complete(task.getId());
         assertEquals(1, taskService.createTaskQuery().count());
         assertEquals(1, taskService.createTaskQuery().taskAssignee("assignee1").count());
+    }
+
+    @Test
+    @SneakyThrows
+    @Deployment(resources = {"processes/article-workflow-auto-complete-start-user-id.bpmn20.xml"}, tenantId = TENANT_APP_1)
+    void satisfyAutoCompleteCondStartId() {
+
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("author", "test@baeldung.com");
+        variables.put("url", "http://baeldung.com/dummy");
+
+        Authentication.setAuthenticatedUserId("start_user_id");
+        runtimeService.startProcessInstanceByKeyAndTenantId("articleReview-autocomplete-start-user-id", variables, TENANT_APP_1);
+        assertEquals(1, runtimeService.createProcessInstanceQuery().count());
+
+        Task task = taskService.createTaskQuery()
+                .singleResult();
+        assertEquals("Review the submitted tutorial", task.getName());
+        variables.put("approved", true);
+        taskService.setAssignee(task.getId(), "assignee1");
+        assertEquals(1, taskService.createTaskQuery().count());
+        assertEquals(1, taskService.createTaskQuery().taskAssignee("assignee1").count());
+
+        taskService.complete(task.getId());
+        assertEquals(0, runtimeService.createProcessInstanceQuery().count());
+
+        List<Comment> comments = commentService.listByInstanceId(task.getProcessInstanceId());
+        assertEquals("AUTO_COMPLETE", comments.getFirst().getType());
     }
 }

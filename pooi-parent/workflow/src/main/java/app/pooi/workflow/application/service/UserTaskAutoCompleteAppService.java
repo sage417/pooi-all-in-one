@@ -36,7 +36,7 @@ public class UserTaskAutoCompleteAppService {
         log.info("satisfyAutoCompleteCond {} {}", processDefinitionKey, taskDefinitionKey);
 
         if (!TaskEntityUtil.getCandidates(task).isEmpty() || StringUtils.isEmpty(task.getAssignee())) {
-            return TaskAutoCompleteType.NO_AUTO_APPROVAL_NEEDED;
+            return TaskAutoCompleteType.NOT_SATISFY_AUTO_APPROVAL_COND;
         }
 
         // find pre user task
@@ -59,7 +59,7 @@ public class UserTaskAutoCompleteAppService {
             }
 
             if (lastTaskAssignee.orElse("").equals(task.getAssignee())) {
-                return TaskAutoCompleteType.CURRENT_APPROVER_IS_PREVIOUS_APPROVER;
+//                return TaskAutoCompleteType.CURRENT_APPROVER_IS_PREVIOUS_APPROVER;
             }
         }
 
@@ -88,7 +88,7 @@ public class UserTaskAutoCompleteAppService {
                 .findFirst();
 
         if (sameAssigneeHistoricTask.isPresent()) {
-            return TaskAutoCompleteType.APPROVER_HAS_APPROVED_IN_PREVIOUS_TASK;
+            return TaskAutoCompleteType.CURRENT_APPROVER_HAS_APPROVED_BEFORE;
         }
 
 
@@ -99,7 +99,7 @@ public class UserTaskAutoCompleteAppService {
             return TaskAutoCompleteType.CURRENT_APPROVER_IS_INITIATOR;
         }
 
-        return TaskAutoCompleteType.NO_AUTO_APPROVAL_NEEDED;
+        return TaskAutoCompleteType.NOT_SATISFY_AUTO_APPROVAL_COND;
     }
 
     private static String searchExecutionProperties(ExecutionEntity execution, Function<ExecutionEntity, String> propertyFun) {
