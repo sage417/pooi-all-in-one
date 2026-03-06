@@ -14,7 +14,7 @@ import java.util.List;
 
 @Repository
 @RequiredArgsConstructor
-public class TaskAgencyProfileRepositoryImpl extends ServiceImpl<TaskAgencyProfileEntityMapper, TaskAgencyProfileEntity> implements TaskAgencyProfileRepository {
+class TaskAgencyProfileRepositoryImpl extends ServiceImpl<TaskAgencyProfileEntityMapper, TaskAgencyProfileEntity> implements TaskAgencyProfileRepository {
 
     private final TaskAgencyProfileConverter converter;
 

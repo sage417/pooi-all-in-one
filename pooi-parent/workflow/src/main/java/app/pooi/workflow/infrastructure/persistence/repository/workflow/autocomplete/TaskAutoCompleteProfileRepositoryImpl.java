@@ -14,7 +14,7 @@ import java.util.Optional;
 
 @Repository
 @RequiredArgsConstructor
-public class TaskAutoCompleteProfileRepositoryImpl extends ServiceImpl<TaskAutoCompleteProfileMapper, TaskAutoCompleteProfileEntity> implements TaskAutoCompleteProfileRepository {
+class TaskAutoCompleteProfileRepositoryImpl extends ServiceImpl<TaskAutoCompleteProfileMapper, TaskAutoCompleteProfileEntity> implements TaskAutoCompleteProfileRepository {
 
     private final TaskAutoCompleteProfileConverter converter;
 

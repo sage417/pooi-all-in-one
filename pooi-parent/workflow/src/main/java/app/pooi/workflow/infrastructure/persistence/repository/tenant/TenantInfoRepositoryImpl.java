@@ -3,26 +3,24 @@ package app.pooi.workflow.infrastructure.persistence.repository.tenant;
 import app.pooi.workflow.domain.model.tenant.TenantInfo;
 import app.pooi.workflow.domain.repository.TenantInfoRepository;
 import app.pooi.workflow.infrastructure.persistence.converter.tenant.TenantInfoConverter;
-import app.pooi.workflow.infrastructure.persistence.service.tenant.TenantInfoEntityService;
+import app.pooi.workflow.infrastructure.persistence.entity.tenant.TenantInfoEntity;
+import app.pooi.workflow.infrastructure.persistence.mapper.tenant.TenantInfoEntityMapper;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
-import javax.annotation.Resource;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Repository
-class TenantInfoRepositoryImpl implements TenantInfoRepository {
+@RequiredArgsConstructor
+class TenantInfoRepositoryImpl extends ServiceImpl<TenantInfoEntityMapper, TenantInfoEntity> implements TenantInfoRepository {
 
-    @Resource
-    private TenantInfoEntityService tenantInfoService;
-
-    @Resource
-    private TenantInfoConverter converter;
-
+    private final TenantInfoConverter converter;
 
     @Override
-    public List<TenantInfo> list() {
-        return tenantInfoService.list().stream()
+    public List<TenantInfo> listTenant() {
+        return super.list().stream()
                 .map(converter::toModel).collect(Collectors.toList());
     }
 }

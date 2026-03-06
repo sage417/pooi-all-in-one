@@ -4,13 +4,15 @@ import app.pooi.workflow.domain.model.workflow.comment.Comment;
 import app.pooi.workflow.domain.repository.CommentRepository;
 import app.pooi.workflow.infrastructure.persistence.converter.workflow.comment.CommentConverter;
 import app.pooi.workflow.infrastructure.persistence.entity.workflow.comment.CommentEntity;
-import app.pooi.workflow.infrastructure.persistence.service.workflow.comment.CommentEntityService;
+import app.pooi.workflow.infrastructure.persistence.mapper.workflow.comment.CommentEntityMapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import javax.annotation.Resource;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
@@ -18,15 +20,12 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Repository
-class CommentRepositoryImpl implements CommentRepository {
+@RequiredArgsConstructor
+class CommentRepositoryImpl extends ServiceImpl<CommentEntityMapper, CommentEntity> implements CommentRepository {
 
     private static final ThreadLocal<Deque<CommentEntity>> TRANSACTIONAL_COMMENT_ENTITY_HOLDER = ThreadLocal.withInitial(ArrayDeque::new);
 
-    @Resource
-    private CommentEntityService commentEntityService;
-
-    @Resource
-    private CommentConverter converter;
+    private final CommentConverter converter;
 
     @Override
     public boolean save(Comment comment, boolean flushCache) {
@@ -34,8 +33,8 @@ class CommentRepositoryImpl implements CommentRepository {
         CommentEntity commentEntity = converter.toEntity(comment);
 
         if (flushCache) {
-            commentEntityService.save(commentEntity);
-            deque.forEach(commentEntityService::save);
+            super.save(commentEntity);
+            deque.forEach(super::save);
             TRANSACTIONAL_COMMENT_ENTITY_HOLDER.remove();
         } else {
             // cache first time
@@ -49,7 +48,8 @@ class CommentRepositoryImpl implements CommentRepository {
 
     @Override
     public List<Comment> listByInstanceId(String processInstanceId) {
-        List<CommentEntity> commentEntities = commentEntityService.listByInstanceId(processInstanceId);
+        List<CommentEntity> commentEntities = getBaseMapper().selectList(Wrappers.lambdaQuery(CommentEntity.class)
+                .eq(CommentEntity::getProcessInstanceId, processInstanceId));
         return commentEntities.stream().map(converter::toModel).collect(Collectors.toList());
     }
 
@@ -61,7 +61,7 @@ class CommentRepositoryImpl implements CommentRepository {
             try {
                 if (!readOnly && !deque.isEmpty()) {
                     // FALL BACK didnt flush before commit
-                    deque.forEach(commentEntityService::save);
+                    deque.forEach(CommentRepositoryImpl.super::save);
                 }
             } finally {
                 TRANSACTIONAL_COMMENT_ENTITY_HOLDER.remove();

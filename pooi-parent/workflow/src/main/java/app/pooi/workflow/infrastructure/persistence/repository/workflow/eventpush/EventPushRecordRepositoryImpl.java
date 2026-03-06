@@ -2,17 +2,15 @@ package app.pooi.workflow.infrastructure.persistence.repository.workflow.eventpu
 
 import app.pooi.workflow.domain.repository.EventPushRecordRepository;
 import app.pooi.workflow.infrastructure.persistence.converter.workflow.eventpush.EventPushRecordConverter;
-import app.pooi.workflow.infrastructure.persistence.service.workflow.eventpush.EventPushRecordEntityService;
+import app.pooi.workflow.infrastructure.persistence.entity.workflow.eventpush.EventPushRecordEntity;
+import app.pooi.workflow.infrastructure.persistence.mapper.workflow.eventpush.EventPushRecordEntityMapper;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
-import javax.annotation.Resource;
-
 @Repository
-class EventPushRecordRepositoryImpl implements EventPushRecordRepository {
+@RequiredArgsConstructor
+class EventPushRecordRepositoryImpl extends ServiceImpl<EventPushRecordEntityMapper, EventPushRecordEntity> implements EventPushRecordRepository {
 
-    @Resource
-    private EventPushRecordEntityService eventPushRecordService;
-
-    @Resource
-    private EventPushRecordConverter converter;
+    private final EventPushRecordConverter converter;
 }

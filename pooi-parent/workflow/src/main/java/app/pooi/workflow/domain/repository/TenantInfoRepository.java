@@ -6,5 +6,5 @@ import java.util.List;
 
 public interface TenantInfoRepository {
 
-    List<TenantInfo> list();
+    List<TenantInfo> listTenant();
 }

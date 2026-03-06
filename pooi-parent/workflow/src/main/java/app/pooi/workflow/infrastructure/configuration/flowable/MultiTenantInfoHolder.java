@@ -28,7 +28,7 @@ class MultiTenantInfoHolder implements TenantInfoHolder, ApplicationContextAware
 
     @Override
     public Collection<String> getAllTenants() {
-        var tenantInfoDOS = this.tenantInfoRepository.list();
+        var tenantInfoDOS = this.tenantInfoRepository.listTenant();
         return tenantInfoDOS.stream().map(TenantInfo::getTenantCode).toList();
     }
 

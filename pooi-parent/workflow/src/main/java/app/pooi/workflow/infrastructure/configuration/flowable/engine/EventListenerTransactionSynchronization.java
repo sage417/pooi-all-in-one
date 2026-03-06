@@ -64,7 +64,7 @@ public class EventListenerTransactionSynchronization implements TransactionSynch
         // 记录event record
         List<EventRecord> eventRecordDOS = prepareEventDOs(runnableList, this.procInstId);
         // not actually multi value insert
-        this.eventRecordRepository.saveBatch(eventRecordDOS, 100);
+        this.eventRecordRepository.saveAll(eventRecordDOS, 100);
 
         String applicationCode = this.applicationInfoHolder.getApplicationCode();
         RLock fairLock = redissonClient.getFairLock(new StringJoiner(":").add("workflow").add("app").add(applicationCode)

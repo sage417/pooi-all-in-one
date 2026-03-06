@@ -5,7 +5,7 @@ import app.pooi.workflow.domain.model.enums.TaskAgencyType;
 import app.pooi.workflow.domain.model.workflow.agency.TaskAgencyProfile;
 import app.pooi.workflow.domain.repository.TaskAgencyProfileRepository;
 import app.pooi.workflow.infrastructure.persistence.entity.workflow.eventpush.EventRecordEntity;
-import app.pooi.workflow.infrastructure.persistence.service.workflow.eventpush.EventRecordEntityService;
+import app.pooi.workflow.infrastructure.persistence.repository.workflow.eventpush.EventRecordRepositoryImpl;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.google.common.collect.Lists;
 import lombok.SneakyThrows;
@@ -40,7 +40,7 @@ class ArticleWorkflowIntegrationDelegateTest {
     @Resource
     private RedissonClient redissonClient;
     @Resource
-    private EventRecordEntityService eventRecordRepository;
+    private EventRecordRepositoryImpl eventRecordRepository;
     @Resource
     private TaskAgencyProfileRepository taskAgencyProfileRepository;
 

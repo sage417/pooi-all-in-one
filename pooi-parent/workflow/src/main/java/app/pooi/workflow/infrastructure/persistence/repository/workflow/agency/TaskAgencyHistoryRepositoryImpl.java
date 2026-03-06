@@ -12,7 +12,7 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 @RequiredArgsConstructor
-public class TaskAgencyHistoryRepositoryImpl extends ServiceImpl<TaskAgencyHistoryEntityMapper, TaskAgencyHistoryEntity> implements TaskAgencyHistoryRepository {
+class TaskAgencyHistoryRepositoryImpl extends ServiceImpl<TaskAgencyHistoryEntityMapper, TaskAgencyHistoryEntity> implements TaskAgencyHistoryRepository {
 
     private final TaskAgencyHistoryConverter converter;
 
