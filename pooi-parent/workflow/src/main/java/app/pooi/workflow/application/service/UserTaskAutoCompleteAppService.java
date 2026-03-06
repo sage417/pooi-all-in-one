@@ -1,9 +1,12 @@
 package app.pooi.workflow.application.service;
 
 import app.pooi.workflow.application.service.enums.TaskAutoCompleteType;
+import app.pooi.workflow.domain.model.workflow.autocomplete.TaskAutoCompleteProfile;
+import app.pooi.workflow.domain.repository.TaskAutoCompleteProfileRepository;
 import app.pooi.workflow.util.BpmnModelUtil;
 import app.pooi.workflow.util.TaskEntityUtil;
 import com.google.common.collect.Ordering;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.flowable.bpmn.model.FlowNode;
@@ -26,44 +29,48 @@ import java.util.stream.Stream;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class UserTaskAutoCompleteAppService {
+
+    private final TaskAutoCompleteProfileRepository taskAutoCompleteProfileRepository;
 
     public TaskAutoCompleteType satisfyAutoCompleteCond(TaskEntity task, ExecutionEntity execution, CommandContext commandContext) {
 
         String processDefinitionKey = execution.getProcessDefinitionKey();
         String taskDefinitionKey = task.getTaskDefinitionKey();
 
-        log.info("satisfyAutoCompleteCond {} {}", processDefinitionKey, taskDefinitionKey);
+        log.info("satisfyAutoCompleteCond key:{} node:{}", processDefinitionKey, taskDefinitionKey);
 
         if (!TaskEntityUtil.getCandidates(task).isEmpty() || StringUtils.isEmpty(task.getAssignee())) {
             return TaskAutoCompleteType.NOT_SATISFY_AUTO_APPROVAL_COND;
         }
 
+        List<TaskAutoCompleteProfile> completeProfiles = taskAutoCompleteProfileRepository.queryByDefinitionKey(processDefinitionKey);
+
+        boolean allowPreFlowElement = completeProfiles.stream().anyMatch(p -> Objects.equals(p.getType(), 1));
+
+        TaskAutoCompleteType autoCompleteType = null;
         // find pre user task
-//        BpmnModel bpmnModel = ProcessDefinitionUtil.getBpmnModel(execution.getProcessDefinitionId());
-        UserTask preFlowElement = BpmnModelUtil.findPreFlowElement(commandContext, ((FlowNode) execution.getCurrentFlowElement()), UserTask.class);
-        if (preFlowElement != null) {
-
-            EntityCache entityCache = CommandContextUtil.getEntityCache(commandContext);
-            List<HistoricTaskInstance> historicTaskInstances = entityCache.findInCache(HistoricTaskInstance.class);
-
-            Optional<String> lastTaskAssignee = historicTaskInstances.stream()
-                    .sorted(Ordering.natural().nullsFirst().onResultOf(HistoricTaskInstance::getEndTime).reverse())
-                    .filter(taskCache -> taskCache.getTaskDefinitionKey().equals(preFlowElement.getId()))
-                    .filter(taskCache -> taskCache.getParentTaskId() == null)
-                    .map(TaskInfo::getAssignee)
-                    .findFirst();
-
-            if (lastTaskAssignee.isPresent()) {
-                log.info("find lastTaskAssignee: {}", lastTaskAssignee);
-            }
-
-            if (lastTaskAssignee.orElse("").equals(task.getAssignee())) {
-//                return TaskAutoCompleteType.CURRENT_APPROVER_IS_PREVIOUS_APPROVER;
-            }
+        if (allowPreFlowElement && (autoCompleteType = satisfyPreFlowElement(task, execution, commandContext)) != null) {
+            return autoCompleteType;
         }
 
+        boolean allowTaskHistory = completeProfiles.stream().anyMatch(p -> Objects.equals(p.getType(), 2));
         // history task history from db
+        if (allowTaskHistory && (autoCompleteType = satisfyHistoryTask(task, execution, commandContext)) != null) {
+            return autoCompleteType;
+        }
+
+        boolean allowStartUser = completeProfiles.stream().anyMatch(p -> Objects.equals(p.getType(), 3));
+        // find start user id
+        if (allowStartUser && StringUtils.equals(task.getAssignee(), searchExecutionProperties(execution, ExecutionEntity::getStartUserId))) {
+            return TaskAutoCompleteType.CURRENT_APPROVER_IS_INITIATOR;
+        }
+
+        return TaskAutoCompleteType.NOT_SATISFY_AUTO_APPROVAL_COND;
+    }
+
+    private static TaskAutoCompleteType satisfyHistoryTask(TaskEntity task, ExecutionEntity execution, CommandContext commandContext) {
         List<HistoricTaskInstanceEntity> tasksByProcessInstanceId = CommandContextUtil.getHistoricTaskService()
                 .findHistoricTasksByProcessInstanceId(execution.getProcessInstanceId());
 
@@ -90,16 +97,35 @@ public class UserTaskAutoCompleteAppService {
         if (sameAssigneeHistoricTask.isPresent()) {
             return TaskAutoCompleteType.CURRENT_APPROVER_HAS_APPROVED_BEFORE;
         }
+        return null;
+    }
 
-
-        // find start user id
-        String startUserId = searchExecutionProperties(execution, ExecutionEntity::getStartUserId);
-
-        if (StringUtils.equals(task.getAssignee(), startUserId)) {
-            return TaskAutoCompleteType.CURRENT_APPROVER_IS_INITIATOR;
+    private static TaskAutoCompleteType satisfyPreFlowElement(TaskEntity task, ExecutionEntity execution, CommandContext commandContext) {
+        //        BpmnModel bpmnModel = ProcessDefinitionUtil.getBpmnModel(execution.getProcessDefinitionId());
+        UserTask preFlowElement = BpmnModelUtil.findPreFlowElement(commandContext, ((FlowNode) execution.getCurrentFlowElement()), UserTask.class);
+        if (preFlowElement == null) {
+            return null;
         }
 
-        return TaskAutoCompleteType.NOT_SATISFY_AUTO_APPROVAL_COND;
+        EntityCache entityCache = CommandContextUtil.getEntityCache(commandContext);
+        List<HistoricTaskInstance> historicTaskInstances = entityCache.findInCache(HistoricTaskInstance.class);
+
+        Optional<String> lastTaskAssignee = historicTaskInstances.stream()
+                .sorted(Ordering.natural().nullsFirst().onResultOf(HistoricTaskInstance::getEndTime).reverse())
+                .filter(taskCache -> taskCache.getTaskDefinitionKey().equals(preFlowElement.getId()))
+                .filter(taskCache -> taskCache.getParentTaskId() == null)
+                .map(TaskInfo::getAssignee)
+                .findFirst();
+
+        if (lastTaskAssignee.isPresent()) {
+            log.info("satisfyPreFlowElement find lastTaskAssignee: {}", lastTaskAssignee);
+        }
+
+        if (lastTaskAssignee.orElse("").equals(task.getAssignee())) {
+            return TaskAutoCompleteType.CURRENT_APPROVER_HAS_APPROVED_IN_PREVIOUS_TASK;
+        }
+
+        return null;
     }
 
     private static String searchExecutionProperties(ExecutionEntity execution, Function<ExecutionEntity, String> propertyFun) {

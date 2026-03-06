@@ -10,7 +10,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
-import java.util.Optional;
+import java.util.List;
 
 @Repository
 @RequiredArgsConstructor
@@ -25,9 +25,9 @@ class TaskAutoCompleteProfileRepositoryImpl extends ServiceImpl<TaskAutoComplete
     }
 
     @Override
-    public Optional<TaskAutoCompleteProfile> queryByDefinitionKey(String definitionKey) {
-        TaskAutoCompleteProfileEntity entity = getBaseMapper().selectOne(Wrappers.lambdaQuery(TaskAutoCompleteProfileEntity.class)
+    public List<TaskAutoCompleteProfile> queryByDefinitionKey(String definitionKey) {
+        List<TaskAutoCompleteProfileEntity> entities = getBaseMapper().selectList(Wrappers.lambdaQuery(TaskAutoCompleteProfileEntity.class)
                 .eq(TaskAutoCompleteProfileEntity::getProcessDefinitionKey, definitionKey));
-        return Optional.ofNullable(converter.toModel(entity));
+        return converter.toModelList(entities);
     }
 }

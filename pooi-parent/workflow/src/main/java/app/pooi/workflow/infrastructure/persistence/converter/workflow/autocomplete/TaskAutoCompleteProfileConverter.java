@@ -5,6 +5,8 @@ import app.pooi.workflow.domain.model.workflow.autocomplete.TaskAutoCompleteProf
 import app.pooi.workflow.infrastructure.persistence.entity.workflow.autocomplete.TaskAutoCompleteProfileEntity;
 import org.mapstruct.Mapper;
 
+import java.util.List;
+
 @Mapper(componentModel = "spring")
 public interface TaskAutoCompleteProfileConverter {
 
@@ -12,4 +14,5 @@ public interface TaskAutoCompleteProfileConverter {
 
     TaskAutoCompleteProfile toModel(TaskAutoCompleteProfileEntity entity);
 
+    List<TaskAutoCompleteProfile> toModelList(List<TaskAutoCompleteProfileEntity> entities);
 }

@@ -12,7 +12,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.TestConstructor;
 
-import java.util.Optional;
+import java.util.List;
 
 @Slf4j
 @ExtendWith(TenantInfoHolderExtension.class)
@@ -38,8 +38,8 @@ public class TaskAutoCompleteProfileRepositoryTest {
 
     @Test
     public void testQueryByDefinitionKey() {
-        Optional<TaskAutoCompleteProfile> taskAutoCompleteProfile = taskAutoCompleteProfileRepository.queryByDefinitionKey("key1");
-        Assertions.assertThat(taskAutoCompleteProfile.isPresent()).isFalse();
+        List<TaskAutoCompleteProfile> taskAutoCompleteProfile = taskAutoCompleteProfileRepository.queryByDefinitionKey("key1");
+        Assertions.assertThat(taskAutoCompleteProfile.isEmpty()).isTrue();
 
         TaskAutoCompleteProfile profile = new TaskAutoCompleteProfile();
         profile.setProcessDefinitionKey("key1");
@@ -49,7 +49,7 @@ public class TaskAutoCompleteProfileRepositoryTest {
         Assertions.assertThat(save).isTrue();
 
         taskAutoCompleteProfile = taskAutoCompleteProfileRepository.queryByDefinitionKey("key1");
-        Assertions.assertThat(taskAutoCompleteProfile.isPresent()).isTrue();
-        Assertions.assertThat(taskAutoCompleteProfile.get().getType()).isEqualTo(1);
+        Assertions.assertThat(taskAutoCompleteProfile.isEmpty()).isFalse();
+        Assertions.assertThat(taskAutoCompleteProfile.get(0).getType()).isEqualTo(1);
     }
 }
