@@ -3,24 +3,22 @@ package app.pooi.workflow.infrastructure.persistence.repository.workflow.agency;
 import app.pooi.workflow.domain.model.workflow.agency.TaskAgencyHistory;
 import app.pooi.workflow.domain.repository.TaskAgencyHistoryRepository;
 import app.pooi.workflow.infrastructure.persistence.converter.workflow.agency.TaskAgencyHistoryConverter;
-import app.pooi.workflow.infrastructure.persistence.service.workflow.agency.TaskAgencyHistoryEntityService;
+import app.pooi.workflow.infrastructure.persistence.entity.workflow.delegate.TaskAgencyHistoryEntity;
+import app.pooi.workflow.infrastructure.persistence.mapper.workflow.agency.TaskAgencyHistoryEntityMapper;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
-import javax.annotation.Resource;
 
 @Repository
-public class TaskAgencyHistoryRepositoryImpl implements TaskAgencyHistoryRepository {
+@RequiredArgsConstructor
+public class TaskAgencyHistoryRepositoryImpl extends ServiceImpl<TaskAgencyHistoryEntityMapper, TaskAgencyHistoryEntity> implements TaskAgencyHistoryRepository {
 
-    @Resource
-    private TaskAgencyHistoryEntityService approvalDelegateRecordEntityService;
-
-    @Resource
-    private TaskAgencyHistoryConverter converter;
-
+    private final TaskAgencyHistoryConverter converter;
 
     @Override
     public void save(TaskAgencyHistory taskAgencyHistory) {
-        this.approvalDelegateRecordEntityService.save(converter.toEntity(taskAgencyHistory));
+        super.save(converter.toEntity(taskAgencyHistory));
     }
 
 }

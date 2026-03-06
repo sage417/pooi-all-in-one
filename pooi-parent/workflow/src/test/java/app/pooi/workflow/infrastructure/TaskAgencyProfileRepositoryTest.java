@@ -5,26 +5,27 @@ import app.pooi.workflow.TenantInfoHolderExtension;
 import app.pooi.workflow.domain.model.enums.TaskAgencyType;
 import app.pooi.workflow.domain.model.workflow.agency.TaskAgencyProfile;
 import app.pooi.workflow.domain.repository.TaskAgencyProfileRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.assertj.core.api.Assertions;
 import org.flowable.common.engine.impl.cfg.multitenant.TenantInfoHolder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.TestConstructor;
 
-import javax.annotation.Resource;
 import java.util.List;
 
 @Slf4j
 @ExtendWith(TenantInfoHolderExtension.class)
 @SpringBootTest
+@RequiredArgsConstructor
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 public class TaskAgencyProfileRepositoryTest {
 
-    @Resource
-    private TaskAgencyProfileRepository taskAgencyProfileRepository;
+    private final TaskAgencyProfileRepository taskAgencyProfileRepository;
 
-    @Resource
-    private TenantInfoHolder tenantInfoHolder;
+    private final TenantInfoHolder tenantInfoHolder;
 
     @Test
     public void testSelectValidByProcessDefinitionKeyAndTenantId() {
