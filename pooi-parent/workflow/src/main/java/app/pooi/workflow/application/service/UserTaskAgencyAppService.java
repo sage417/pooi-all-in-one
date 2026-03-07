@@ -68,15 +68,15 @@ public class UserTaskAgencyAppService {
     }
 
     public TaskApprovalNode generateTaskApprovalNode(@NonNull Set<String> candidates) {
-        TaskApprovalNode approvalNode = TaskApprovalNode.newApproval();
+        TaskApprovalNode approvalNode = TaskApprovalNode.root();
         for (String candidate : candidates) {
             approvalNode.addChild(new TaskApprovalNode(candidate));
         }
         return approvalNode;
     }
 
-    TaskApprovalNode calculateApprovalDelegateRelation(@NonNull TaskApprovalNode approvalNode, @NonNull TaskDelegateNode taskDelegateNode) {
-        TaskApprovalNode newApprovalNode = TaskApprovalNode.newApproval();
+    static TaskApprovalNode calculateApprovalDelegateRelation(@NonNull TaskApprovalNode approvalNode, @NonNull TaskDelegateNode taskDelegateNode) {
+        TaskApprovalNode newApprovalNode = TaskApprovalNode.root();
 
         for (TaskApprovalNode child : approvalNode.getChildren()) {
             Optional<TaskDelegateNode> optionalTaskDelegateNode = taskDelegateNode.getChildren().stream()
@@ -98,7 +98,7 @@ public class UserTaskAgencyAppService {
                         .filter(node -> node.getValue().equals(leafNodePath.getLast().getValue()))
                         .findFirst();
                 if (taskApprovalNode.isPresent()) {
-                    taskApprovalNode.get().getDelegateChains().add(new TaskDelegatePath(leafNodePath));
+                    taskApprovalNode.get().getDelegatePaths().add(new TaskDelegatePath(leafNodePath));
                 } else {
                     newApprovalNode.addChild(TaskApprovalNode.fromDelegateNodePath(leafNodePath));
                 }
@@ -110,7 +110,7 @@ public class UserTaskAgencyAppService {
 
 
     private TaskDelegateNode generateTaskDelegateRelation(List<TaskAgencyProfile> taskAgencyProfiles) {
-        TaskDelegateNode rootNode = new TaskDelegateNode("__DELEGATE__");
+        TaskDelegateNode rootNode = TaskDelegateNode.root();
         // args check
         if (CollectionUtils.isEmpty(taskAgencyProfiles)) {
             return rootNode;
