@@ -13,10 +13,10 @@ import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 
+@Setter
+@Getter
 @ConfigurationProperties("flowable.custom.func")
 public class FlowableCustomProperties {
 
-    @Getter
-    @Setter
     private Boolean approvalDelegateEnable = Boolean.TRUE;
 }

@@ -1,22 +1,39 @@
+todo list:
+
 - [x] 事件推送
 - [x] shardingsphere接入
-- [x] 动态加签 app.pooi.workflow.application.service.UserTaskAddSignAppService.addSignTask
-- [x] 分布式缓存 app.pooi.workflow.infrastructure.configuration.flowable.engine.ProcessDefinitionDeploymentCache
-- [x] 分享/传阅 app.pooi.workflow.application.service.UserTaskOperationAppService.addCirculate
-- [x] 审批历史 app.pooi.workflow.domain.service.comment.CommentService
-- [x] 任务回退/跳转 app.pooi.workflow.application.service.ProcessInstanceMoveAppService.rollback
-- [x] 任务挂起 app.pooi.workflow.application.service.UserTaskSuspendAppService
-- [ ] 审批全权代理/共享 app.pooi.workflow.application.service.UserTaskAgencyAppService
-- [ ] 任务条件自动审批 app.pooi.workflow.application.service.UserTaskAutoCompleteAppService
-- [ ] 审批人异常处理
-  app.pooi.workflow.infrastructure.configuration.flowable.FlowableCreateUserTaskInterceptor.afterCreateUserTask
+- [x] 动态加签
+- [x] 分布式缓存
+- [x] 分享/传阅
+- [x] 审批历史
+- [x] 任务回退/跳转
+- [x] 任务挂起
+- [ ] 审批全权代理/共享
+- [x] 任务条件自动审批
+- [ ] 任务审批人异常处理
 - [ ] 任务超时处理
-- [ ] 办理人员规则/审批人对接人员/组织关系 app.pooi.workflow.application.service.OrgQueryAppService
-- [ ] 流程流转显示 app.pooi.workflow.application.service.ProcessDiagramAppService
+- [ ] 办理人员规则/审批人对接人员/组织关系
+- [ ] 流程流转显示
 - [ ] ~~标题自动计算~~
 - [ ] 多语言
 - [x] 测试
-- [x] 对接iam app.pooi.workflow.infrastructure.repository.IamUserRepositoryImpl
+- [x] 对接iam
+
+| 问题领域   | 类名                                      |
+|--------|-----------------------------------------|
+| 人员信息   | IamUserAppService.java                  |
+| 组织信息   | OrgQueryAppService.java                 |
+| 流程部署   | ProcessDefinitionDeployAppService.java  |
+| 流程图    | ProcessDiagramAppService.java           |
+| 流程节点跳转 | ProcessInstanceMoveAppService.java      |
+| 流程发起   | ProcessInstanceStartAppService.java     |
+| 流程维度查询 | UserProcessInstanceQueryAppService.java |
+| 任务加签   | UserTaskAddSignAppService.java          |
+| 任务代办   | UserTaskAgencyAppService.java           |
+| 任务自动审批 | UserTaskAutoCompleteAppService.java     |
+| 任务操作   | UserTaskOperationAppService.java        |
+| 任务维度查询 | UserTaskQueryAppService.java            |
+| 任务挂起   | UserTaskSuspendAppService.java          |
 
 ### 代操作/代理/共享/加签 定义
 

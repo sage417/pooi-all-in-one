@@ -9,7 +9,7 @@ import lombok.experimental.Accessors;
 @Setter
 public class TaskDelegateResult {
 
-    public static TaskDelegateResult NO_NEED_CHANGE_ASSIGNEE_RESULT = new TaskDelegateResult().setMatchDelegateProfile(false);
+    public static final TaskDelegateResult NO_NEED_CHANGE_ASSIGNEE_RESULT = new TaskDelegateResult().setMatchDelegateProfile(false);
 
     private boolean matchDelegateProfile;
 

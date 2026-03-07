@@ -170,9 +170,8 @@ public class CustomUserTaskActivityBehavior extends UserTaskActivityBehavior {
             handleAssignments(taskService, beforeContext.getAssignee(), beforeContext.getOwner(), beforeContext.getCandidateUsers(),
                     beforeContext.getCandidateGroups(), task, expressionManager, execution, processEngineConfiguration);
 
-            // ---------- task agency ---------- //
+            // task agency must before interceptor, listener and event dispatch
             taskAgencyAfterHandleAssignments((ExecutionEntity) execution, task, processEngineConfiguration);
-            // ---------- task agency ---------- //
 
             if (processEngineConfiguration.getCreateUserTaskInterceptor() != null) {
                 CreateUserTaskAfterContext afterContext = new CreateUserTaskAfterContext(userTask, task, execution);
