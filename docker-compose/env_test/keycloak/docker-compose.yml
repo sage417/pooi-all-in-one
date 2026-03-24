@@ -14,7 +14,8 @@ services:
       - POSTGRESQL_USERNAME=bn_keycloak
       - POSTGRESQL_DATABASE=${POSTGRES_DB}
     volumes:
-      - 'postgresql_data:/bitnami/postgresql'
+      # - 'postgresql_data:/bitnami/postgresql'
+      - './postgresql:/bitnami/postgresql'
     healthcheck:
       test: pg_isready --dbname=${POSTGRES_DB} --username='bn_keycloak' || exit 1
       interval: 15s
@@ -36,8 +37,10 @@ services:
       postgresql:
         condition: service_healthy
     ports:
-      - "8090:8080"
+      - "127.0.0.1:8090:8080"
       #- "0:9000" #metrics
+    volumes:
+      - './providers:/opt/bitnami/keycloak/providers'
     healthcheck:
       test: ['CMD-SHELL', "/bin/bash", "exec 3<>/dev/tcp/127.0.0.1/8080;echo -e 'GET /health/ready HTTP/1.1\r\nhost: http://localhost\r\nConnection: close\r\n\r\n' >&3;if [ $? -eq 0 ]; then echo 'Healthcheck Successful';exit 0;else echo 'Healthcheck Failed';exit 1;fi;"] 
       interval: 15s
@@ -45,8 +48,3 @@ services:
       retries: 3
     networks:
       - devops-test
-
-
-volumes:
-  postgresql_data:
-    driver: local
