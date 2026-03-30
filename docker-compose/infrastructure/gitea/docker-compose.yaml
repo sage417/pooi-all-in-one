@@ -6,20 +6,30 @@ version: "3"
 
 services:
   server:
-    image: public.ecr.aws/bitnami/gitea:1.25.3
+    image: gitea/gitea:1.25
     container_name: gitea
     environment:
       - USER_UID=1000
       - USER_GID=1000
-      - GITEA_DOMAIN=gitea.pooi.app
-      - GITEA_ROOT_URL=https://gitea.pooi.app
-    restart: always
+      - GITEA__server__DOMAIN=gitea.pooi.app
+      - GITEA__server__ROOT_URL=https://gitea.pooi.app
+      - GITEA__server__SSH_PORT=222
+      - GITEA__database__DB_TYPE=postgres
+      - GITEA__database__HOST=postgresql:5432
+      - GITEA__database__NAME=bitnami_gitea
+      - GITEA__database__USER=bn_gitea
+      - GITEA__database__PASSWD=
+    restart: unless-stopped
     # networks:
     #   - gitea
     volumes:
-      - ./gitea:/bitnami/gitea
+      - ./gitea/data:/data
+#      - ./gitea/custom/conf:/etc/gitea
 #      - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      postgresql:
+        condition: service_healthy
     healthcheck:
           test: curl -fSs server:3000/api/healthz || exit 1
           start_period: 5s
@@ -27,7 +37,7 @@ services:
           timeout: 5s
           retries: 3
     ports:
-      - "3300:3000"
+      - "127.0.0.1:3300:3000"
       - "222:22"
 
   postgresql:
@@ -58,11 +68,14 @@ services:
       GITEA_RUNNER_REGISTRATION_TOKEN: "${REGISTRATION_TOKEN}"
       GITEA_RUNNER_NAME: "${RUNNER_NAME}"
       GITEA_RUNNER_LABELS: "${RUNNER_LABELS}"
+    ports:
+      - "127.0.0.1:8088:8088"
     restart: always
     depends_on:
       server:
         condition: service_healthy
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - ./runner/config.yaml:/config.yaml
       - ./runner/data:/data
       - /var/run/docker.sock:/var/run/docker.sock
