@@ -89,7 +89,7 @@ jobs:
         id: current-date-time  # Sets an ID for this step to refer to its outputs
         run: echo "::set-output name=rfc3339::$(date -u +'%Y-%m-%dT%H:%M:%SZ')"  # Gets current date/time in RFC 3339 format
       - name: Build Docker image  # Step to build and push the Docker image
-        uses: docker/build-push-action@v6  # Uses an action to build and push Docker images
+        uses: docker/build-push-action@v7  # Uses an action to build and push Docker images
         with:  # Inputs to the build-push-action
           context: ${{ env.DOCKER_CONTEXT_DIR }}  # Specifies the build context
           push: true  # Enables pushing the built image to a registry
