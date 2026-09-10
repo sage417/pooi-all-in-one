@@ -19,11 +19,13 @@ updates:
 - package-ecosystem: maven
   directory: "/pooi-parent"
   schedule:
-    interval: daily
+    interval: "weekly"
   ignore:
     # ignore Maven APIs/SPIs
     - dependency-name: org.apache.maven:*
 - package-ecosystem: "github-actions"
-  directory: "/pooi-parent"
+  # Workflow files stored in the default location of `.github/workflows`
+  # You don't need to specify `/.github/workflows` for `directory`. You can use `directory: "/"`.
+  directory: "/"
   schedule:
-    interval: "daily"
+    interval: "weekly"
