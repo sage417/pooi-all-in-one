@@ -81,7 +81,7 @@ jobs:
           username: ${{ secrets.REGISTRY_USERNAME }}  # Docker Hub username from secrets
           password: ${{ secrets.REGISTRY_TOKEN }}  # Docker Hub token/password from secrets
       - name: Set up Docker Buildx  # Step to set up Docker Buildx
-        uses: docker/setup-buildx-action@v3  # Uses an action to set up Buildx
+        uses: docker/setup-buildx-action@v4  # Uses an action to set up Buildx
       - name: Get base image digest  # Step to get the digest of the base image
         id: base-image-digest  # Sets an ID for this step to refer to its outputs
         run: echo "::set-output name=digest::$(docker pull docker.gitea.com/runner-images:ubuntu-22.04 | grep -Eo 'sha256:[a-f0-9]+' | cut -d ':' -f 2)"  # Pulls base image and extracts digest
