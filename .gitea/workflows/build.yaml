@@ -36,7 +36,7 @@ jobs:
             exit 1
           fi
       - name: Setup-java21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: 'jdkfile'
           jdkFile: ${{ runner.temp }}/java_package.tar.gz
