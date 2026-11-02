@@ -75,7 +75,7 @@ jobs:
           echo "List files in the DOCKER_CONTEXT_DIR"
           ls -la ${DOCKER_CONTEXT_DIR}
       - name: Login to Container Registry
-        uses: docker/login-action@v3  # Uses an action to perform the login
+        uses: docker/login-action@v4  # Uses an action to perform the login
         with:  # Inputs to the login-action
           registry: https://gitea.pooi.app # Specifies the registry to log in to. You can set a variable or just hardcode this value.
           username: ${{ secrets.REGISTRY_USERNAME }}  # Docker Hub username from secrets
